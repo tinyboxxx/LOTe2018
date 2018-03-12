@@ -172,7 +172,7 @@ void bootbmp(uint8_t a)
 #define boot_height 60
 
   u8g2.drawXBMP(65, 0, boot_width, boot_height, boot_bits);
-  //delay(1000);
+  delay(1000);
   strip.setPixelColor(0, strip.Color(255, 0, 0));
   strip.setPixelColor(15, strip.Color(255, 0, 0));
   strip.show();
@@ -283,8 +283,7 @@ void setup(void)
   strip.show();
   
 
-  MsTimer2::set(1000, tictoc); // 中断设置函数，每 1s 进入一次中断
-  MsTimer2::start();           //开始计时
+
 }
 
 void loop(void)
@@ -340,17 +339,17 @@ void loop(void)
 char *ftostr4(float i)
 {
   char buff[13];
-  //sprintf(buff, "%fV",i);
-  dtostrf(i, 1, 2, buff);
-  strcat(buff, "V");
+  sprintf(buff, "%fV",i);
+  //dtostrf(i, 1, 2, buff);
+  //strcat(buff, "V");
   return buff;
 }
 
 char *itostr2(int i)
 {
   char buff[3];
-  //sprintf(buff, "%02d", i);
-  itoa(i, buff, 10);
+  sprintf(buff, "%02d", i);
+  //itoa(i, buff, 10);
 
   return buff;
 }
