@@ -1,405 +1,448 @@
-/*
-
-  GraphicsTest.ino
-
-  Universal 8bit Graphics Library (https://github.com/olikraus/u8g2/)
-
-  Copyright (c) 2016, olikraus@gmail.com
-  All rights reserved.
-
-  Redistribution and use in source and binary forms, with or without modification, 
-  are permitted provided that the following conditions are met:
-
-  * Redistributions of source code must retain the above copyright notice, this list 
-    of conditions and the following disclaimer.
-    
-  * Redistributions in binary form must reproduce the above copyright notice, this 
-    list of conditions and the following disclaimer in the documentation and/or other 
-    materials provided with the distribution.
-
-  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND 
-  CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, 
-  INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
-  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE 
-  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR 
-  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, 
-  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT 
-  NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; 
-  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER 
-  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, 
-  STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
-  ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  
-
-*/
+#include <Adafruit_NeoPixel.h>
 
 #include <Arduino.h>
+#include <TM1637Display.h>
 #include <U8g2lib.h>
-
-#ifdef U8X8_HAVE_HW_SPI
 #include <SPI.h>
-#endif
-#ifdef U8X8_HAVE_HW_I2C
-#include <Wire.h>
-#endif
 
+const byte address[6] = "00001";
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(16 /*LEDS*/, /*PIN*/ A3, NEO_GRB + NEO_KHZ800);
+TM1637Display display(/*CLK*/ 14, /*DIO*/ 16);
 
+uint8_t TM1637_wait[] = { // [==] EXIT
+    SEG_A | SEG_F | SEG_E | SEG_D,
+    SEG_A | SEG_D,
+    SEG_A | SEG_D,
+    SEG_A | SEG_D | SEG_B | SEG_C};
+uint8_t TM1637_data[] = {0xff, 0xff, 0xff, 0xff};
+
+U8G2_SSD1322_NHD_256X64_1_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/10, /* dc=*/9, /* reset=*/8); // Enable U8G2_16BIT in u8g2.h
+//U8G2_SSD1325_NHD_128X64_1_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
+//BeepPin is D3
+void u8g2_prepare(void)
+{
+  //u8g2.setFont(u8g2_font_6x10_tf);
+  //u8g2.setFontRefHeightExtendedText();
+  //u8g2.setDrawColor(1);
+  //u8g2.setFontPosTop();
+  //u8g2.setFontDirection(0);
+}
+
+#define GCenterX 226 //211-229.5-248
+#define GCenterY 21  //0-18-37
+#define GCenter18 21 //size
+#define GCenter9 11  //half size
+
+int rpm = 0;
+int rpm_last = 0;
+int rpm_same = 0;
+float spd_hz = 8;
+int spd = 0;
+int temp = 0;
+
+int GearRatio = 0; //0.43-3.0
+//#define GearRatioConstant = 0.17522;
+int TimeH = 3;
+int TimeMM = 59;
+int TimeSS = 59;
+int GForceX = 0;
+int GForceY = 0;
+int GForceXScreen = GCenterX - 1;
+int GForceYScreen = GCenterY - 1;
+int GearRatioCube = 0;
+float Volt = 0.00;
+uint8_t page_state = 0;
+int LEDbrightness = 255;
+long LastSyncTime=0;
+long nowMicro=0;
+long BoostStartTime=0;
+int BootedTime=0;
+int BootDistance=0;
+int BootedDistance=0;
 /*
-  U8glib Example Overview:
-    Frame Buffer Examples: clearBuffer/sendBuffer. Fast, but may not work with all Arduino boards because of RAM consumption
-    Page Buffer Examples: firstPage/nextPage. Less RAM usage, should work with all Arduino boards.
-    U8x8 Text Only Example: No RAM usage, direct communication with display controller. No graphics, 8x8 Text only.
-    
+ 
+1 START Countdown
+2 PAUSE Countdown
+3 RESET Countdown
+4 DEMO  Mode : ON
+5 Launch  Control
+6 Speaker  Volume 
+7 SET  Local Time
+8 SYNC  GPS  Time 
+9 System RUN Time
+
+  RACE  Finished!
+  Congratulations
 */
 
-// Please UNCOMMENT one of the contructor lines below
-// U8g2 Contructor List (Frame Buffer)
-// The complete list is available here: https://github.com/olikraus/u8g2/wiki/u8g2setupcpp
-// Please update the pin numbers according to your setup. Use U8X8_PIN_NONE if the reset pin is not connected
-//U8G2_NULL u8g2(U8G2_R0);	// null device, a 8x8 pixel display which does nothing
-//U8G2_SSD1306_128X64_NONAME_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_SSD1306_128X64_NONAME_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 12, /* dc=*/ 4, /* reset=*/ 6);	// Arduboy (Production, Kickstarter Edition)
-//U8G2_SSD1306_128X64_NONAME_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_SSD1306_128X64_NONAME_F_3W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* reset=*/ 8);
-//U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
-//U8G2_SSD1306_128X64_ALT0_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);   // same as the NONAME variant, but may solve the "every 2nd line skipped" problem
-//U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* reset=*/ 8);
-//U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE);   // All Boards without Reset of the Display
-//U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2(U8G2_R0, /* clock=*/ 16, /* data=*/ 17, /* reset=*/ U8X8_PIN_NONE);   // ESP32 Thing, pure SW emulated I2C
-//U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ 16, /* data=*/ 17);   // ESP32 Thing, HW I2C with pin remapping
-//U8G2_SSD1306_128X64_NONAME_F_6800 u8g2(U8G2_R0, 13, 11, 2, 3, 4, 5, 6, A4, /*enable=*/ 7, /*cs=*/ 10, /*dc=*/ 9, /*reset=*/ 8);
-//U8G2_SSD1306_128X64_NONAME_F_8080 u8g2(U8G2_R0, 13, 11, 2, 3, 4, 5, 6, A4, /*enable=*/ 7, /*cs=*/ 10, /*dc=*/ 9, /*reset=*/ 8);
-//U8G2_SSD1306_128X64_VCOMH0_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);	// same as the NONAME variant, but maximizes setContrast() range
-//U8G2_SSD1306_128X64_ALT0_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);	// same as the NONAME variant, but may solve the "every 2nd line skipped" problem
-//U8G2_SH1106_128X64_NONAME_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
-//U8G2_SH1106_128X64_VCOMH0_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);		// same as the NONAME variant, but maximizes setContrast() range
-//U8G2_SH1106_128X64_WINSTAR_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);		// same as the NONAME variant, but uses updated SH1106 init sequence
-//U8G2_SH1107_64X128_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_SH1107_128X128_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_SH1107_128X128_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ 8);
-//U8G2_SH1107_SEEED_96X96_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_SSD1306_128X32_UNIVISION_F_SW_I2C u8g2(U8G2_R0, /* clock=*/ 21, /* data=*/ 20, /* reset=*/ U8X8_PIN_NONE);   // Adafruit Feather M0 Basic Proto + FeatherWing OLED
-//U8G2_SSD1306_128X32_UNIVISION_F_SW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE);   // Adafruit Feather ESP8266/32u4 Boards + FeatherWing OLED
-//U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);  // Adafruit ESP8266/32u4/ARM Boards + FeatherWing OLED
-//U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ SCL, /* data=*/ SDA);   // pin remapping with ESP8266 HW I2C
-//U8G2_SSD1306_64X48_ER_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);   // EastRising 0.66" OLED breakout board, Uno: A4=SDA, A5=SCL, 5V powered
-//U8G2_SSD1306_64X32_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE); 
-//U8G2_SSD1306_64X32_1F_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE); 
-//U8G2_SSD1306_96X16_ER_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);   // EastRising 0.69" OLED
-//U8G2_SSD1322_NHD_256X64_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);	// Enable U8G2_16BIT in u8g2.h
-U8G2_SSD1322_NHD_256X64_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);	// Enable U8G2_16BIT in u8g2.h
-//U8G2_SSD1322_NHD_128X64_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_SSD1322_NHD_128X64_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_SSD1325_NHD_128X64_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8); 
-//U8G2_SSD1325_NHD_128X64_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);	
-//U8G2_SSD1326_ER_256X32_1_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);         // experimental driver for ER-OLED018-1
-//U8G2_SSD1327_SEEED_96X96_F_SW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE);	// Seeedstudio Grove OLED 96x96
-//U8G2_SSD1327_SEEED_96X96_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);	// Seeedstudio Grove OLED 96x96
-//U8G2_SSD1327_MIDAS_128X128_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_SSD1327_MIDAS_128X128_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_SSD1329_128X96_NONAME_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_SSD1329_128X96_NONAME_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_SSD1305_128X32_NONAME_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_SSD1305_128X32_NONAME_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_SSD1309_128X64_NONAME0_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);  
-//U8G2_SSD1309_128X64_NONAME0_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);  
-//U8G2_SSD1309_128X64_NONAME2_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);  
-//U8G2_SSD1309_128X64_NONAME2_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);  
-//U8G2_LD7032_60X32_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 11, /* data=*/ 12, /* cs=*/ 9, /* dc=*/ 10, /* reset=*/ 8);	// SW SPI Nano Board
-//U8G2_LD7032_60X32_F_4W_SW_I2C u8g2(U8G2_R0, /* clock=*/ 11, /* data=*/ 12, /* reset=*/ U8X8_PIN_NONE);	// NOT TESTED!
-//U8G2_UC1701_EA_DOGS102_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_UC1701_EA_DOGS102_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_PCD8544_84X48_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);  // Nokia 5110 Display
-//U8G2_PCD8544_84X48_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8); 		// Nokia 5110 Display
-//U8G2_PCF8812_96X65_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);	// Could be also PCF8814
-//U8G2_PCF8812_96X65_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);						// Could be also PCF8814
-//U8G2_HX1230_96X68_F_3W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* reset=*/ 8);
-//U8G2_HX1230_96X68_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_KS0108_128X64_F u8g2(U8G2_R0, 8, 9, 10, 11, 4, 5, 6, 7, /*enable=*/ 18, /*dc=*/ 17, /*cs0=*/ 14, /*cs1=*/ 15, /*cs2=*/ U8X8_PIN_NONE, /* reset=*/  U8X8_PIN_NONE); 	// Set R/W to low!
-//U8G2_KS0108_ERM19264_F u8g2(U8G2_R0, 8, 9, 10, 11, 4, 5, 6, 7, /*enable=*/ 18, /*dc=*/ 17, /*cs0=*/ 14, /*cs1=*/ 15, /*cs2=*/ 16, /* reset=*/  U8X8_PIN_NONE); 	// Set R/W to low!
-//U8G2_ST7920_192X32_F_8080 u8g2(U8G2_R0, 8, 9, 10, 11, 4, 5, 6, 7, /*enable=*/ 18, /*cs=*/ U8X8_PIN_NONE, /*dc=*/ 17, /*reset=*/ U8X8_PIN_NONE);
-//U8G2_ST7920_192X32_F_SW_SPI u8g2(U8G2_R0, /* clock=*/ 18 /* A4 */ , /* data=*/ 16 /* A2 */, /* CS=*/ 17 /* A3 */, /* reset=*/ U8X8_PIN_NONE);
-//U8G2_ST7920_128X64_F_8080 u8g2(U8G2_R0, 8, 9, 10, 11, 4, 5, 6, 7, /*enable=*/ 18 /* A4 */, /*cs=*/ U8X8_PIN_NONE, /*dc/rs=*/ 17 /* A3 */, /*reset=*/ 15 /* A1 */);	// Remember to set R/W to 0 
-//U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, /* clock=*/ 18 /* A4 */ , /* data=*/ 16 /* A2 */, /* CS=*/ 17 /* A3 */, /* reset=*/ U8X8_PIN_NONE);
-//U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* CS=*/ 10, /* reset=*/ 8);
-//U8G2_ST7920_128X64_F_HW_SPI u8g2(U8G2_R0, /* CS=*/ 10, /* reset=*/ 8);
-//U8G2_ST7565_EA_DOGM128_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_ST7565_EA_DOGM128_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_ST7565_64128N_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_ST7565_64128N_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_ST7565_EA_DOGM132_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ U8X8_PIN_NONE);	// DOGM132 Shield
-//U8G2_ST7565_EA_DOGM132_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ U8X8_PIN_NONE);	// DOGM132 Shield
-//U8G2_ST7565_ZOLEN_128X64_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_ST7565_ZOLEN_128X64_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_ST7565_LM6059_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);		// Adafruit ST7565 GLCD
-//U8G2_ST7565_LM6059_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);		// Adafruit ST7565 GLCD
-//U8G2_ST7565_ERC12864_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_ST7565_ERC12864_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_ST7565_NHD_C12832_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_ST7565_NHD_C12832_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_ST7565_NHD_C12864_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_ST7565_NHD_C12864_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_ST7567_PI_132X64_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 7, /* dc=*/ 9, /* reset=*/ 8);  // Pax Instruments Shield, LCD_BL=6
-//U8G2_ST7567_PI_132X64_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 7, /* dc=*/ 9, /* reset=*/ 8);  // Pax Instruments Shield, LCD_BL=6
-//U8G2_ST7567_JLX12864_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 7, /* dc=*/ 9, /* reset=*/ 8);  
-//U8G2_ST7567_JLX12864_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 7, /* dc=*/ 9, /* reset=*/ 8);  
-//U8G2_ST75256_JLX172104_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_ST75256_JLX172104_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_ST75256_JLX256128_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);	// Enable U8g2 16 bit mode for this display
-//U8G2_ST75256_JLX256128_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);		// Enable U8g2 16 bit mode for this display
-//U8G2_ST75256_JLX25664_F_2ND_HW_I2C u8g2(U8G2_R0, /* reset=*/ 8);	// Due, 2nd I2C, enable U8g2 16 bit mode for this display
-//U8G2_NT7534_TG12864R_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);  
-//U8G2_NT7534_TG12864R_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);  
-//U8G2_ST7588_JLX12864_F_SW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ 5);  
-//U8G2_ST7588_JLX12864_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ 5);
-//U8G2_IST3020_ERC19264_F_6800 u8g2(U8G2_R0, 44, 43, 42, 41, 40, 39, 38, 37,  /*enable=*/ 28, /*cs=*/ 32, /*dc=*/ 30, /*reset=*/ 31); // Connect WR pin with GND
-//U8G2_IST3020_ERC19264_F_8080 u8g2(U8G2_R0, 44, 43, 42, 41, 40, 39, 38, 37,  /*enable=*/ 29, /*cs=*/ 32, /*dc=*/ 30, /*reset=*/ 31); // Connect RD pin with 3.3V
-//U8G2_IST3020_ERC19264_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);
-//U8G2_LC7981_160X80_F_6800 u8g2(U8G2_R0, 8, 9, 10, 11, 4, 5, 6, 7, /*enable=*/ 18, /*cs=*/ 14, /*dc=*/ 15, /*reset=*/ 16); // Connect RW with GND
-//U8G2_LC7981_160X160_F_6800 u8g2(U8G2_R0, 8, 9, 10, 11, 4, 5, 6, 7, /*enable=*/ 18, /*cs=*/ 14, /*dc=*/ 15, /*reset=*/ 16); // Connect RW with GND
-//U8G2_LC7981_240X128_F_6800 u8g2(U8G2_R0, 8, 9, 10, 11, 4, 5, 6, 7, /*enable=*/ 18, /*cs=*/ 14, /*dc=*/ 15, /*reset=*/ 16); // Connect RW with GND
-//U8G2_SED1520_122X32_F u8g2(U8G2_R0, 8, 9, 10, 11, 4, 5, 6, 7, /*dc=*/ A0, /*e1=*/ A3, /*e2=*/ A2, /* reset=*/  A4); 	// Set R/W to low!
-//U8G2_T6963_240X128_F_8080 u8g2(U8G2_R0, 8, 9, 10, 11, 4, 5, 6, 7, /*enable=*/ 17, /*cs=*/ 14, /*dc=*/ 15, /*reset=*/ 16); // Connect RD with +5V, FS0 and FS1 with GND
-//U8G2_T6963_256X64_F_8080 u8g2(U8G2_R0, 8, 9, 10, 11, 4, 5, 6, 7, /*enable=*/ 17, /*cs=*/ 14, /*dc=*/ 15, /*reset=*/ 16); // Connect RD with +5V, FS0 and FS1 with GND
-//U8G2_SED1330_240X128_F_8080 u8g2(U8G2_R0, 8, 9, 10, 11, 4, 5, 6, 7, /*enable=*/ 17, /*cs=*/ 14, /*dc=*/ 15, /*reset=*/ 16); // Connect RD with +5V, FG with GND
-//U8G2_SED1330_240X128_F_6800 u8g2(U8G2_R0, 13, 11, 2, 3, 4, 5, 6, A4, /*enable=*/ 7, /*cs=*/ 10, /*dc=*/ 9, /*reset=*/ 8); // A0 is dc pin!
-//U8G2_RA8835_NHD_240X128_F_8080 u8g2(U8G2_R0, 8, 9, 10, 11, 4, 5, 6, 7, /*enable=*/ 17, /*cs=*/ 14, /*dc=*/ 15, /*reset=*/ 16); // Connect /RD = E with +5V, enable is /WR = RW, FG with GND, 14=Uno Pin A0
-//U8G2_RA8835_NHD_240X128_F_6800 u8g2(U8G2_R0, 8, 9, 10, 11, 4, 5, 6, 7,  /*enable=*/ 17, /*cs=*/ 14, /*dc=*/ 15, /*reset=*/ 16); // A0 is dc pin, /WR = RW = GND, enable is /RD = E
-//U8G2_UC1604_JLX19264_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8); 
-//U8G2_UC1604_JLX19264_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);  
-//U8G2_UC1608_ERC24064_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);  // SW SPI, Due ERC24064-1 Test Setup
-//U8G2_UC1608_ERC240120_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8); 
-//U8G2_UC1608_240X128_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);  // SW SPI, Due ERC24064-1 Test Setup
-//U8G2_UC1610_EA_DOGXL160_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/  U8X8_PIN_NONE);
-//U8G2_UC1610_EA_DOGXL160_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/  U8X8_PIN_NONE);
-//U8G2_UC1611_EA_DOGM240_F_2ND_HW_I2C u8g2(U8G2_R0, /* reset=*/ 8);	// Due, 2nd I2C, DOGM240 Test Board
-//U8G2_UC1611_EA_DOGM240_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);   // Due, SW SPI, DOGXL240 Test Board
-//U8G2_UC1611_EA_DOGXL240_F_2ND_HW_I2C u8g2(U8G2_R0, /* reset=*/ 8);	// Due, 2nd I2C, DOGXL240 Test Board
-//U8G2_UC1611_EA_DOGXL240_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);   // Due, SW SPI, DOGXL240 Test Board
-//U8G2_UC1611_EW50850_F_8080 u8g2(U8G2_R0, 8, 9, 10, 11, 4, 5, 6, 7,  /*enable=*/ 18, /*cs=*/ 3, /*dc=*/ 16, /*reset=*/ 16); // 240x160, Connect RD/WR1 pin with 3.3V, CS is aktive high
-//U8G2_UC1638_160X128_F_4W_HW_SPI u8g2(U8G2_R2, /* cs=*/ 2, /* dc=*/ 3, /* reset=*/ 4); 	 // Not tested
-//U8G2_SSD1606_172X72_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);		// eInk/ePaper Display
-//U8G2_SSD1607_200X200_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);	// eInk/ePaper Display, original LUT from embedded artists
-//U8G2_SSD1607_GD_200X200_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);	// Good Display
-//U8G2_IL3820_296X128_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);	// WaveShare 2.9 inch eInk/ePaper Display, enable 16 bit mode for this display!
-//U8G2_IL3820_V2_296X128_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);	// ePaper Display, lesser flickering and faster speed, enable 16 bit mode for this display!
-
-// End of constructor list
-
-
-void u8g2_prepare(void) {
-  u8g2.setFont(u8g2_font_6x10_tf);
-  u8g2.setFontRefHeightExtendedText();
-  u8g2.setDrawColor(1);
-  u8g2.setFontPosTop();
-  u8g2.setFontDirection(0);
-}
-
-void u8g2_box_frame(uint8_t a) {
-  u8g2.drawStr( 0, 0, "drawBox");
-  u8g2.drawBox(5,10,20,10);
-  u8g2.drawBox(10+a,15,30,7);
-  u8g2.drawStr( 0, 30, "drawFrame");
-  u8g2.drawFrame(5,10+30,20,10);
-  u8g2.drawFrame(10+a,15+30,30,7);
-}
-
-void u8g2_disc_circle(uint8_t a) {
-  u8g2.drawStr( 0, 0, "drawDisc");
-  u8g2.drawDisc(10,18,9);
-  u8g2.drawDisc(24+a,16,7);
-  u8g2.drawStr( 0, 30, "drawCircle");
-  u8g2.drawCircle(10,18+30,9);
-  u8g2.drawCircle(24+a,16+30,7);
-}
-
-void u8g2_r_frame(uint8_t a) {
-  u8g2.drawStr( 0, 0, "drawRFrame/Box");
-  u8g2.drawRFrame(5, 10,40,30, a+1);
-  u8g2.drawRBox(50, 10,25,40, a+1);
-}
-
-void u8g2_string(uint8_t a) {
-  u8g2.setFontDirection(0);
-  u8g2.drawStr(30+a,31, " 0");
-  u8g2.setFontDirection(1);
-  u8g2.drawStr(30,31+a, " 90");
-  u8g2.setFontDirection(2);
-  u8g2.drawStr(30-a,31, " 180");
-  u8g2.setFontDirection(3);
-  u8g2.drawStr(30,31-a, " 270");
-}
-
-void u8g2_line(uint8_t a) {
-  u8g2.drawStr( 0, 0, "drawLine");
-  u8g2.drawLine(7+a, 10, 40, 55);
-  u8g2.drawLine(7+a*2, 10, 60, 55);
-  u8g2.drawLine(7+a*3, 10, 80, 55);
-  u8g2.drawLine(7+a*4, 10, 100, 55);
-}
-
-void u8g2_triangle(uint8_t a) {
-  uint16_t offset = a;
-  u8g2.drawStr( 0, 0, "drawTriangle");
-  u8g2.drawTriangle(14,7, 45,30, 10,40);
-  u8g2.drawTriangle(14+offset,7-offset, 45+offset,30-offset, 57+offset,10-offset);
-  u8g2.drawTriangle(57+offset*2,10, 45+offset*2,30, 86+offset*2,53);
-  u8g2.drawTriangle(10+offset,40+offset, 45+offset,30+offset, 86+offset,53+offset);
-}
-
-void u8g2_ascii_1() {
-  char s[2] = " ";
-  uint8_t x, y;
-  u8g2.drawStr( 0, 0, "ASCII page 1");
-  for( y = 0; y < 6; y++ ) {
-    for( x = 0; x < 16; x++ ) {
-      s[0] = y*16 + x + 32;
-      u8g2.drawStr(x*7, y*10+10, s);
-    }
-  }
-}
-
-void u8g2_ascii_2() {
-  char s[2] = " ";
-  uint8_t x, y;
-  u8g2.drawStr( 0, 0, "ASCII page 2");
-  for( y = 0; y < 6; y++ ) {
-    for( x = 0; x < 16; x++ ) {
-      s[0] = y*16 + x + 160;
-      u8g2.drawStr(x*7, y*10+10, s);
-    }
-  }
-}
-
-void u8g2_extra_page(uint8_t a)
+/*void LaunchControl(uint8_t a)
 {
-  u8g2.drawStr( 0, 0, "Unicode");
-  u8g2.setFont(u8g2_font_unifont_t_symbols);
-  u8g2.setFontPosTop();
-  u8g2.drawUTF8(0, 24, "☀ ☁");
-  switch(a) {
-    case 0:
-    case 1:
-    case 2:
-    case 3:
-      u8g2.drawUTF8(a*3, 36, "☂");
-      break;
-    case 4:
-    case 5:
-    case 6:
-    case 7:
-      u8g2.drawUTF8(a*3, 36, "☔");
-      break;
+  //enter boot mode
+  if (Speed < 1) //if stoped
+  {
+    BoostStartTime = micros();
+    BootDistance = distance;
+    u8g2.drawStr(62, 64, "READY TO BOOST");
   }
+  else if (BootedDistance > 45) //ENDS
+    if (BootedTime <= 0)//not start
+    {
+      BootedTime = micros();
+      BootedDistance = distance - BootDistance;
+    }
+    else
+    {
+      u8g2.drawStr(62, 64, "BOOT Finished"); //Finished
+      u8g2.drawStr(62, 64, "YourTimeIs");    //Finished
+      //YourTimeIs + BootedTime
+    }
+  else
+  //BOOSTING
 }
+*/
+void bootbmp(uint8_t a)
+{
+  static const unsigned char boot_bits[] U8X8_PROGMEM = {
+     
+    0x70, 0xa2, 0xe7, 0xe0, 0x21, 0x20, 0x02, 0x8e, 0xa3, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x88, 0xa2, 0x10, 0x21, 0x22, 0x20, 0x02, 0x51, 0xa4, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x88, 0xa2, 0x10, 0x21, 0x22, 0x20, 0x02, 0x51, 0xb4, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x08, 0xa2, 0x10, 0x20, 0x52, 0x20, 0x05, 0x50, 0x24, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x10, 0xa2, 0x20, 0xe0, 0x51, 0x20, 0x05, 0x48, 0x24, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x20, 0xa2, 0x47, 0x20, 0x52, 0x20, 0x05, 0x48, 0x24, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x40, 0xa2, 0x80, 0x20, 0x52, 0x20, 0x05, 0x44, 0x24, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x80, 0xa2, 0x00, 0x21, 0x52, 0x22, 0x05, 0x42, 0x24, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x88, 0xa2, 0x10, 0x21, 0xfa, 0xa2, 0x0f, 0x42, 0x24, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x88, 0xa2, 0x10, 0x21, 0x8a, 0xa2, 0x08, 0x41, 0x24, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x70, 0x9c, 0xe7, 0xe0, 0x89, 0x9c, 0x08, 0x9f, 0x23, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0xe0, 0x0f, 0x7f, 0xf0, 0xf1, 0x0f, 0xc3, 0x00, 0xfe, 0xe1, 0x03, 0xf8, 0x03, 0x1f, 0x7c, 0xf0, 0x07,
+    0xe0, 0x1f, 0x7f, 0xfc, 0xf3, 0x1f, 0xe3, 0x00, 0xff, 0xf9, 0x07, 0xf8, 0xc7, 0x3f, 0xff, 0xf0, 0x07,
+    0x70, 0x9c, 0x03, 0x8e, 0x33, 0x1c, 0x63, 0x00, 0x18, 0x1c, 0x07, 0x1c, 0xe7, 0x38, 0xe3, 0x38, 0x00,
+    0x30, 0x9c, 0x01, 0x86, 0x33, 0x1c, 0x33, 0x00, 0x18, 0x0c, 0x07, 0x0c, 0x67, 0xb8, 0xe3, 0x18, 0x00,
+    0x30, 0x8c, 0x01, 0x86, 0x39, 0x0c, 0x33, 0x00, 0x18, 0x0c, 0x03, 0x0c, 0x63, 0x98, 0x61, 0x18, 0x00,
+    0x38, 0x8e, 0x01, 0x87, 0x19, 0x0c, 0x1b, 0x00, 0x1c, 0x0e, 0x03, 0x8e, 0x73, 0x98, 0x01, 0x18, 0x00,
+    0x38, 0xce, 0x01, 0xc7, 0x19, 0x0e, 0x1b, 0x00, 0x0c, 0x8e, 0x03, 0x8e, 0x73, 0xdc, 0x01, 0x1c, 0x00,
+    0x18, 0xcf, 0x00, 0xc3, 0x18, 0x0e, 0x0f, 0x00, 0x0c, 0x86, 0x01, 0xc6, 0x33, 0xcc, 0x00, 0x0c, 0x00,
+    0x18, 0xc7, 0x1f, 0xc3, 0x1c, 0x06, 0x0f, 0x00, 0x0c, 0x86, 0x01, 0xc6, 0x31, 0xcc, 0x00, 0xfc, 0x01,
+    0xfc, 0xc7, 0x8f, 0xff, 0x0c, 0x07, 0x07, 0x00, 0x0e, 0x87, 0x01, 0xff, 0xf9, 0xcf, 0x00, 0xfc, 0x00,
+    0xfc, 0xe1, 0x8f, 0xff, 0x0c, 0x07, 0x07, 0x00, 0x06, 0xc3, 0x01, 0x7f, 0xf8, 0xef, 0x00, 0xfe, 0x00,
+    0xcc, 0x60, 0x80, 0x61, 0x0e, 0x03, 0x03, 0x00, 0x06, 0xc3, 0x00, 0x33, 0x18, 0x66, 0x00, 0x06, 0x00,
+    0xcc, 0x60, 0xc0, 0x61, 0x0e, 0x03, 0x03, 0x00, 0x06, 0xc3, 0x00, 0x33, 0x1c, 0x66, 0x00, 0x06, 0x00,
+    0xce, 0x70, 0xc0, 0x61, 0x86, 0x03, 0x03, 0x00, 0x87, 0xe3, 0x80, 0x33, 0x1c, 0x76, 0x00, 0x07, 0x00,
+    0xc6, 0x70, 0xc0, 0x70, 0x86, 0x83, 0x03, 0x00, 0x83, 0xe1, 0x80, 0x31, 0x0c, 0x77, 0x10, 0x07, 0x00,
+    0xc6, 0x30, 0xc0, 0x30, 0x87, 0x81, 0x01, 0x00, 0x83, 0x61, 0x80, 0x31, 0x0c, 0x33, 0x0c, 0x03, 0x00,
+    0xc7, 0x30, 0xe0, 0x30, 0x87, 0x81, 0x01, 0x00, 0x83, 0x61, 0xc0, 0x31, 0x0e, 0x33, 0x0c, 0x03, 0x00,
+    0xc7, 0xf8, 0xe7, 0x38, 0xff, 0x80, 0x01, 0x80, 0xc3, 0x3f, 0xc0, 0x31, 0x8e, 0xf3, 0x87, 0x7f, 0x00,
+    0xc3, 0xf8, 0x63, 0x38, 0x7f, 0xc0, 0x01, 0x80, 0x81, 0x1f, 0xc0, 0x30, 0x86, 0xf3, 0x83, 0x3f, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x20, 0xa0, 0x00, 0xfe, 0x00, 0xc8, 0x01, 0x40, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x20, 0xe0, 0x00, 0xaa, 0x00, 0x88, 0x00, 0x40, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x20, 0x7e, 0xe7, 0xbf, 0xee, 0x8e, 0xdc, 0xfd, 0x77, 0x07, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x20, 0x2a, 0xa1, 0x6a, 0x8a, 0x8a, 0x54, 0x55, 0x55, 0x01, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x20, 0x2e, 0xa2, 0xaa, 0xea, 0x8a, 0x54, 0x5d, 0x75, 0x01, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0xa0, 0x22, 0xa4, 0xaa, 0xaa, 0x8a, 0xd4, 0x45, 0x15, 0x01, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0xe0, 0x6e, 0xe7, 0xaa, 0xee, 0x8e, 0x1c, 0xdd, 0x75, 0x01, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc0, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 
-#define cross_width 24
-#define cross_height 24
-static const unsigned char cross_bits[] U8X8_PROGMEM  = {
-  0x00, 0x18, 0x00, 0x00, 0x24, 0x00, 0x00, 0x24, 0x00, 0x00, 0x42, 0x00, 
-  0x00, 0x42, 0x00, 0x00, 0x42, 0x00, 0x00, 0x81, 0x00, 0x00, 0x81, 0x00, 
-  0xC0, 0x00, 0x03, 0x38, 0x3C, 0x1C, 0x06, 0x42, 0x60, 0x01, 0x42, 0x80, 
-  0x01, 0x42, 0x80, 0x06, 0x42, 0x60, 0x38, 0x3C, 0x1C, 0xC0, 0x00, 0x03, 
-  0x00, 0x81, 0x00, 0x00, 0x81, 0x00, 0x00, 0x42, 0x00, 0x00, 0x42, 0x00, 
-  0x00, 0x42, 0x00, 0x00, 0x24, 0x00, 0x00, 0x24, 0x00, 0x00, 0x18, 0x00, };
+};
 
-#define cross_fill_width 24
-#define cross_fill_height 24
-static const unsigned char cross_fill_bits[] U8X8_PROGMEM  = {
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x18, 0x00, 0x18, 0x64, 0x00, 0x26, 
-  0x84, 0x00, 0x21, 0x08, 0x81, 0x10, 0x08, 0x42, 0x10, 0x10, 0x3C, 0x08, 
-  0x20, 0x00, 0x04, 0x40, 0x00, 0x02, 0x80, 0x00, 0x01, 0x80, 0x18, 0x01, 
-  0x80, 0x18, 0x01, 0x80, 0x00, 0x01, 0x40, 0x00, 0x02, 0x20, 0x00, 0x04, 
-  0x10, 0x3C, 0x08, 0x08, 0x42, 0x10, 0x08, 0x81, 0x10, 0x84, 0x00, 0x21, 
-  0x64, 0x00, 0x26, 0x18, 0x00, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, };
 
-#define cross_block_width 14
-#define cross_block_height 14
-static const unsigned char cross_block_bits[] U8X8_PROGMEM  = {
-  0xFF, 0x3F, 0x01, 0x20, 0x01, 0x20, 0x01, 0x20, 0x01, 0x20, 0x01, 0x20, 
-  0xC1, 0x20, 0xC1, 0x20, 0x01, 0x20, 0x01, 0x20, 0x01, 0x20, 0x01, 0x20, 
-  0x01, 0x20, 0xFF, 0x3F, };
+#define boot_width 131
+#define boot_height 60
 
-void u8g2_bitmap_overlay(uint8_t a) {
-  uint8_t frame_size = 28;
+  u8g2.drawXBMP(65, 0, boot_width, boot_height, boot_bits);
+  //delay(1000);
+  strip.setPixelColor(0, strip.Color(255, 0, 0));
+  strip.setPixelColor(15, strip.Color(255, 0, 0));
+  strip.show();
+  page_state++;
+};
 
-  u8g2.drawStr(0, 0, "Bitmap overlay");
+void dataface(uint8_t a)
+{
+  //ALL UI:
+  u8g2.setFont(u8g2_font_6x10_tf);
+  u8g2.drawStr(109, 7, "Speed");
+  u8g2.drawStr(151, 7, " Temp");
+  u8g2.drawStr(68, 7, "Gear");
+  u8g2.drawStr(0, 64, "RPM:");
+  u8g2.drawStr(205, 53, "Gx:");
+  u8g2.drawStr(205, 61, "Gy:");
+  u8g2.drawStr(0, 7, "Volt");
 
-  u8g2.drawStr(0, frame_size + 12, "Solid / transparent");
-  u8g2.setBitmapMode(false /* solid */);
-  u8g2.drawFrame(0, 10, frame_size, frame_size);
-  u8g2.drawXBMP(2, 12, cross_width, cross_height, cross_bits);
-  if(a & 4)
-    u8g2.drawXBMP(7, 17, cross_block_width, cross_block_height, cross_block_bits);
+#define GCenterX 226 //211-229.5-248
+#define GCenterY 21  //0-18-37
+#define GCenter18 21 //size
+#define GCenter9 11  //half size
 
-  u8g2.setBitmapMode(true /* transparent*/);
-  u8g2.drawFrame(frame_size + 5, 10, frame_size, frame_size);
-  u8g2.drawXBMP(frame_size + 7, 12, cross_width, cross_height, cross_bits);
-  if(a & 4)
-    u8g2.drawXBMP(frame_size + 12, 17, cross_block_width, cross_block_height, cross_block_bits);
-}
+  //GForceCube:
+  u8g2.drawFrame(GCenterX - GCenter18, GCenterY - GCenter18, 2 * GCenter18 + 1, 2 * GCenter18 + 1); //211-229.5-248
+  u8g2.drawFrame(GCenterX - GCenter9, GCenterY - GCenter9, 2 * GCenter9 + 1, 2 * GCenter9 + 1);     //220-229.5-239
+  u8g2.drawLine(GCenterX, GCenterY - GCenter18, GCenterX, GCenterY - 1);
+  u8g2.drawLine(GCenterX, GCenterY + 1, GCenterX, 2 * GCenter18);
+  u8g2.drawLine(GCenterX - GCenter18, GCenterY, GCenterX - 1, GCenterY);
+  u8g2.drawLine(GCenterX + 1, GCenterY, GCenterX + GCenter18, GCenterY);
 
-void u8g2_bitmap_modes(uint8_t transparent) {
-  const uint8_t frame_size = 24;
+  //Temp Cube:
+  u8g2.drawFrame(152, 11, 4, 19); //211-229.5-248
+                                  //Gear Cube:
+  u8g2.drawFrame(67, 11, 4, 19);  //211-229.5-248
+                                  //Speed Cube:
+  u8g2.drawFrame(100, 0, 5, 47);  //211-229.5-248
 
-  u8g2.drawBox(0, frame_size * 0.5, frame_size * 5, frame_size);
-  u8g2.drawStr(frame_size * 0.5, 50, "Black");
-  u8g2.drawStr(frame_size * 2, 50, "White");
-  u8g2.drawStr(frame_size * 3.5, 50, "XOR");
-  
-  if(!transparent) {
-    u8g2.setBitmapMode(false /* solid */);
-    u8g2.drawStr(0, 0, "Solid bitmap");
-  } else {
-    u8g2.setBitmapMode(true /* transparent*/);
-    u8g2.drawStr(0, 0, "Transparent bitmap");
+  //------
+  //DATAS:
+  u8g2.drawBox(GForceXScreen, GForceYScreen, 3, 3); //GForceBox
+
+  //temp
+  if (temp > 40)
+    u8g2.drawStr(150, 7, "!");
+  u8g2.drawBox(153, 30 - map(temp, 20, 60, 1, 19), 2, map(temp, 20, 60, 1, 19));
+  //gear
+  u8g2.drawBox(68, 30 - map(GearRatio, 0, 9, 1, 19), 2, map(GearRatio, 0, 9, 1, 19));
+  //speed
+  u8g2.drawBox(101, 47 - map(spd, 0, 60, 1, 47), 3, map(spd, 0, 60, 1, 47));
+
+  u8g2.setFont(u8g2_font_6x10_tf);
+  u8g2.drawStr(222, 53, itostr4(GForceX)); //gforcex
+  u8g2.drawStr(222, 61, itostr4(GForceY)); //gforcey
+
+  if (rpm >= 999 && rpm <= 4000)
+  {
+    display.showNumberDec(rpm, true, 4, 0);
+    u8g2.drawStr(25, 64, itostr4(rpm)); //rpm
+    FreshRPMLED(rpm);
   }
-  u8g2.setDrawColor(0);// Black
-  u8g2.drawXBMP(frame_size * 0.5, 24, cross_width, cross_height, cross_bits);
-  u8g2.setDrawColor(1); // White
-  u8g2.drawXBMP(frame_size * 2, 24, cross_width, cross_height, cross_bits);
-  u8g2.setDrawColor(2); // XOR
-  u8g2.drawXBMP(frame_size * 3.5, 24, cross_width, cross_height, cross_bits);
+  else
+    display.setSegments(TM1637_wait);
+
+  u8g2.setFont(u8g2_font_logisoso18_tr);
+  u8g2.drawStr(0, 52, itostrtime());    //time
+  u8g2.drawStr(157, 29, itostr2(temp)); //temp
+  if (GearRatio == 0)
+    u8g2.drawStr(72, 29, "N");
+  else
+    u8g2.drawStr(72, 29, itostr2(GearRatio)); //Gear
+
+  u8g2.drawStr(0, 29, ftostr4(Volt)); //battery
+
+  u8g2.setFont(u8g2_font_logisoso34_tn);
+  u8g2.drawStr(105, 47, itostr2(spd)); //speed}
 }
 
-uint8_t draw_state = 0;
-
-void draw(void) {
+void drawlist(void)
+{
   u8g2_prepare();
-  switch(draw_state >> 3) {
-    case 0: u8g2_box_frame(draw_state&7); break;
-    case 1: u8g2_disc_circle(draw_state&7); break;
-    case 2: u8g2_r_frame(draw_state&7); break;
-    case 3: u8g2_string(draw_state&7); break;
-    case 4: u8g2_line(draw_state&7); break;
-    case 5: u8g2_triangle(draw_state&7); break;
-    case 6: u8g2_ascii_1(); break;
-    case 7: u8g2_ascii_2(); break;
-    case 8: u8g2_extra_page(draw_state&7); break;
-    case 9: u8g2_bitmap_modes(0); break;
-    case 10: u8g2_bitmap_modes(1); break;
-    case 11: u8g2_bitmap_overlay(draw_state&7); break;
+  switch (page_state >> 3)
+  {
+  case 0:
+    bootbmp(page_state & 7);
+    break;
+  case 1:
+    dataface(page_state & 7);
+    break;
   }
 }
 
-
-void setup(void) {
-  u8g2.begin();
+void tictoc()
+{ //倒计时减一
+  TimeSS--;
 }
 
-void loop(void) {
-  // picture loop  
-  u8g2.clearBuffer();
-  draw();
-  u8g2.sendBuffer();
+void setup(void)
+{
+  u8g2.begin();
+  Serial.begin(115200);
+  Serial.println("booting");
+
+  display.setBrightness(0xff);
+  display.setSegments(TM1637_data);
+
+  strip.begin();
+  strip.show();
   
-  // increase the state
-  draw_state++;
-  if ( draw_state >= 12*8 )
-    draw_state = 0;
 
-  // deley between each page
+  MsTimer2::set(1000, tictoc); // 中断设置函数，每 1s 进入一次中断
+  MsTimer2::start();           //开始计时
+}
+
+void loop(void)
+{
+  u8g2.firstPage();
+  do
+  {
+    drawlist();
+  } while (u8g2.nextPage());
 
 
+  if (rpm != 0) // log old data for neat data display
+    rpm_last = rpm;
+
+  //GetNewData
+  spd = random(10, 50);
+  temp = random(28, 50);
+  rpm = random(2700, 3800);
+  GForceX = random(-900, 900);
+  GForceY = random(-300, 300);
+  GForceXScreen = GForceX / 60 + GCenterX - 1;
+  GForceYScreen = GForceY / 60 + GCenterY - 1;
+  GearRatio = random(0, 9);
+  Volt -= 0.01;
+
+  //Post Process
+  if (rpm_last == rpm) //Drop Outdate RPM
+  {
+    if (rpm_same >= 5)
+      rpm = 0;
+    else
+      rpm_same++;
+  }
+
+  if (TimeSS == -1)
+  {
+    TimeSS = 59;
+    TimeMM--;
+  }
+  if (TimeMM == -1)
+  {
+    TimeMM = 59;
+    TimeH--;
+  }
+  if (TimeH == -1)
+  {
+    TimeH = 0;
+    TimeMM = 0;
+    TimeSS = 0;
+  }
+}
+
+char *ftostr4(float i)
+{
+  char buff[13];
+  //sprintf(buff, "%fV",i);
+  dtostrf(i, 1, 2, buff);
+  strcat(buff, "V");
+  return buff;
+}
+
+char *itostr2(int i)
+{
+  char buff[3];
+  //sprintf(buff, "%02d", i);
+  itoa(i, buff, 10);
+
+  return buff;
+}
+
+char *itostr4(int i)
+{
+  char buff[4];
+  sprintf(buff, "%#04d", i);
+  //itoa(i, buff, 10);
+  return buff;
+}
+
+char *itostrtime()
+{
+  char buff[8];
+  sprintf(buff, "%02d:%02d:%02d", TimeH, TimeMM, TimeSS);
+  return buff;
+}
+
+void FreshRPMLED(int i) //LEDs
+{
+  int lednumber = map(i, 1700, 3800, 1, 8);
+  switch (lednumber)
+  {
+  //0,1||2,3,4,5,6||7,8||9,10,11,12,13||14,15
+  // RED| Orange|   GREEN    | Orange |RED
+  case 0:
+    SetLedColor(strip.Color(0, 0, 0), 0, 15); //Black
+    break;
+  case 1:
+    SetLedColor(strip.Color(0, LEDbrightness, 0), 7, 8); //Green
+    SetLedColor(strip.Color(0, 0, 0), 0, 6);             //Black
+    SetLedColor(strip.Color(0, 0, 0), 9, 15);            //Black
+    break;
+  case 2:
+    SetLedColor(strip.Color(0, LEDbrightness, 0), 6, 9); //Green
+    SetLedColor(strip.Color(0, 0, 0), 0, 5);             //Black
+    SetLedColor(strip.Color(0, 0, 0), 10, 15);           //Black
+    break;
+  case 3:
+    SetLedColor(strip.Color(0, LEDbrightness, 0), 6, 9);                   //Green
+    strip.setPixelColor(5, strip.Color(LEDbrightness, LEDbrightness, 0));  //Orange
+    strip.setPixelColor(10, strip.Color(LEDbrightness, LEDbrightness, 0)); //Orange
+    SetLedColor(strip.Color(0, 0, 0), 0, 4);                               //Black
+    SetLedColor(strip.Color(0, 0, 0), 11, 15);                             //Black
+    break;
+  case 4:
+    SetLedColor(strip.Color(0, LEDbrightness, 0), 6, 9);               //Green
+    SetLedColor(strip.Color(LEDbrightness, LEDbrightness, 0), 4, 5);   //Orange
+    SetLedColor(strip.Color(LEDbrightness, LEDbrightness, 0), 10, 11); //Orange
+    SetLedColor(strip.Color(0, 0, 0), 0, 3);                           //Black
+    SetLedColor(strip.Color(0, 0, 0), 12, 15);                         //Black
+    break;
+  case 5:
+    SetLedColor(strip.Color(0, LEDbrightness, 0), 6, 9);               //Green
+    SetLedColor(strip.Color(LEDbrightness, LEDbrightness, 0), 3, 5);   //Orange
+    SetLedColor(strip.Color(LEDbrightness, LEDbrightness, 0), 10, 12); //Orange
+    SetLedColor(strip.Color(0, 0, 0), 0, 2);                           //Black
+    SetLedColor(strip.Color(0, 0, 0), 13, 15);                         //Black
+    break;
+
+  case 6:
+    SetLedColor(strip.Color(0, LEDbrightness, 0), 6, 9);               //Green
+    SetLedColor(strip.Color(LEDbrightness, LEDbrightness, 0), 2, 5);   //Orange
+    SetLedColor(strip.Color(LEDbrightness, LEDbrightness, 0), 10, 13); //Orange
+    SetLedColor(strip.Color(0, 0, 0), 0, 1);                           //Black
+    SetLedColor(strip.Color(0, 0, 0), 14, 15);                         //Black
+    break;
+  case 7:
+    SetLedColor(strip.Color(0, LEDbrightness, 0), 6, 9);               //Green
+    SetLedColor(strip.Color(LEDbrightness, LEDbrightness, 0), 2, 5);   //Orange
+    SetLedColor(strip.Color(LEDbrightness, LEDbrightness, 0), 10, 13); //Orange
+    strip.setPixelColor(0, strip.Color(0, 0, 0));                      //Black
+    strip.setPixelColor(15, strip.Color(0, 0, 0));                     //Black
+    strip.setPixelColor(1, strip.Color(LEDbrightness, 0, 0));
+    strip.setPixelColor(14, strip.Color(LEDbrightness, 0, 0));
+    break;
+  case 8:
+    SetLedColor(strip.Color(0, LEDbrightness, 0), 6, 9);               //Green
+    SetLedColor(strip.Color(LEDbrightness, LEDbrightness, 0), 2, 5);   //Orange
+    SetLedColor(strip.Color(LEDbrightness, LEDbrightness, 0), 10, 13); //Orange
+    SetLedColor(strip.Color(LEDbrightness, 0, 0), 0, 1);               //Red
+    SetLedColor(strip.Color(LEDbrightness, 0, 0), 14, 15);             //Red
+    break;
+  }
+  strip.show();
+}
+
+void SetLedColor(uint32_t c, int i, int j)
+{
+  for (i; i <= j; i++)
+  {
+    strip.setPixelColor(i, c);
+  }
 }
