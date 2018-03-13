@@ -256,6 +256,7 @@ void drawlist(void)
   {
   case 0:
     bootbmp(page_state & 7);
+    delay(1000);
     break;
   case 1:
     dataface(page_state & 7);
@@ -290,7 +291,7 @@ void loop(void)
   do
   {
     drawlist();
-    delay(1000);
+    
   } while (u8g2.nextPage());
 
 
@@ -338,9 +339,9 @@ void loop(void)
 char *ftostr4(float i)
 {
   char buff[13];
-  sprintf(buff, "%fV",i);
-  //dtostrf(i, 1, 2, buff);
-  strcat(buff, "V");
+  //sprintf(buff, "%fV",i);
+  dtostrf(i, 1, 2, buff);
+//  strcat(buff, "V");
   return buff;
 }
 
@@ -443,4 +444,33 @@ void SetLedColor(uint32_t c, int i, int j)
   {
     strip.setPixelColor(i, c);
   }
+}
+
+
+/*
+  dtostrf - Emulation for dtostrf function from avr-libc
+  Copyright (c) 2013 Arduino.  All rights reserved.
+  Written by Cristian Maglie <c.maglie@bug.st>
+
+  This library is free software; you can redistribute it and/or
+  modify it under the terms of the GNU Lesser General Public
+  License as published by the Free Software Foundation; either
+  version 2.1 of the License, or (at your option) any later version.
+
+  This library is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+  Lesser General Public License for more details.
+
+  You should have received a copy of the GNU Lesser General Public
+  License along with this library; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+*/
+
+char *dtostrf(double val, signed char width, unsigned char prec, char *sout)
+{
+  char fmt[20];
+  sprintf(fmt, "%%%d.%df", width, prec);
+  sprintf(sout, fmt, val);
+  return sout;
 }
