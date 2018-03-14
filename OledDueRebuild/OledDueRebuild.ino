@@ -54,53 +54,85 @@ void loop(void)
     u8g2.drawStr(0, 10, "Hello World!"); // write something to the internal memory
     u8g2.sendBuffer();                   // transfer internal memory to the display
     delay(10);
+
+    //
+    //GetNewData
+    spd = random(10, 50);
+    temp = random(28, 50);
+    rpm = random(2700, 3800);
+    GForceX = random(-900, 900);
+    GForceY = random(-300, 300);
+    GForceXScreen = GForceX / 60 + GCenterX - 1;
+    GForceYScreen = GForceY / 60 + GCenterY - 1;
+    GearRatio = random(0, 9);
+    Volt -= 0.01;
+    //
+
+    //Post Process
+    if (rpm_last == rpm) //Drop Outdate RPM
+    {
+        if (rpm_same >= 5)
+            rpm = 0;
+        else
+            rpm_same++;
+    }
+
+    if (TimeSS == -1)
+    {
+        TimeSS = 59;
+        TimeMM--;
+    }
+    if (TimeMM == -1)
+    {
+        TimeMM = 59;
+        TimeH--;
+    }
+    if (TimeH == -1)
+    {
+        TimeH = 0;
+        TimeMM = 0;
+        TimeSS = 0;
+    }
+
 //
- //GetNewData
-  spd = random(10, 50);
-  temp = random(28, 50);
-  rpm = random(2700, 3800);
-  GForceX = random(-900, 900);
-  GForceY = random(-300, 300);
-  GForceXScreen = GForceX / 60 + GCenterX - 1;
-  GForceYScreen = GForceY / 60 + GCenterY - 1;
-  GearRatio = random(0, 9);
-  Volt -= 0.01;
-  //
+// frames
+//
 
-  //Post Process
-  if (rpm_last == rpm) //Drop Outdate RPM
-  {
-    if (rpm_same >= 5)
-      rpm = 0;
-    else
-      rpm_same++;
-  }
+u8g2.setFont(u8g2_font_6x10_tf);
+  u8g2.drawStr(109, 7, "Speed");
+  u8g2.drawStr(151, 7, " Temp");
+  u8g2.drawStr(68, 7, "Gear");
+  u8g2.drawStr(0, 64, "RPM:");
+  u8g2.drawStr(205, 53, "Gx:");
+  u8g2.drawStr(205, 61, "Gy:");
+  u8g2.drawStr(0, 7, "Volt");
 
-  if (TimeSS == -1)
-  {
-    TimeSS = 59;
-    TimeMM--;
-  }
-  if (TimeMM == -1)
-  {
-    TimeMM = 59;
-    TimeH--;
-  }
-  if (TimeH == -1)
-  {
-    TimeH = 0;
-    TimeMM = 0;
-    TimeSS = 0;
-  }
-}
+#define GCenterX 226 //211-229.5-248
+#define GCenterY 21  //0-18-37
+#define GCenter18 21 //size
+#define GCenter9 11  //half size
 
+  //GForceCube:
+  u8g2.drawFrame(GCenterX - GCenter18, GCenterY - GCenter18, 2 * GCenter18 + 1, 2 * GCenter18 + 1); //211-229.5-248
+  u8g2.drawFrame(GCenterX - GCenter9, GCenterY - GCenter9, 2 * GCenter9 + 1, 2 * GCenter9 + 1);     //220-229.5-239
+  u8g2.drawLine(GCenterX, GCenterY - GCenter18, GCenterX, GCenterY - 1);
+  u8g2.drawLine(GCenterX, GCenterY + 1, GCenterX, 2 * GCenter18);
+  u8g2.drawLine(GCenterX - GCenter18, GCenterY, GCenterX - 1, GCenterY);
+  u8g2.drawLine(GCenterX + 1, GCenterY, GCenterX + GCenter18, GCenterY);
 
+  //Temp Cube:
+  u8g2.drawFrame(152, 11, 4, 19); //211-229.5-248
+                                  //Gear Cube:
+  u8g2.drawFrame(67, 11, 4, 19);  //211-229.5-248
+                                  //Speed Cube:
+  u8g2.drawFrame(100, 0, 5, 47);  //211-229.5-248
 
 }
+
 
 void bootbmp(void)
 {
-  static const unsigned char boot_bits[] U8X8_PROGMEM = {
+static const unsigned char boot_bits[] U8X8_PROGMEM = {
      
     0x70, 0xa2, 0xe7, 0xe0, 0x21, 0x20, 0x02, 0x8e, 0xa3, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x88, 0xa2, 0x10, 0x21, 0x22, 0x20, 0x02, 0x51, 0xa4, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -162,11 +194,13 @@ void bootbmp(void)
     0x00, 0x00, 0x00, 0xa0, 0x22, 0xa4, 0xaa, 0xaa, 0x8a, 0xd4, 0x45, 0x15, 0x01, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0xe0, 0x6e, 0xe7, 0xaa, 0xee, 0x8e, 0x1c, 0xdd, 0x75, 0x01, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc0, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  };
-
+    };
 #define boot_width 131
 #define boot_height 60
-
-  u8g2.drawXBMP(65, 0, boot_width, boot_height, boot_bits);
- 
+u8g2.drawXBMP(65, 0, boot_width, boot_height, boot_bits); 
 };
+
+void tictoc() //倒计时读秒
+{
+  TimeSS--;
+}
