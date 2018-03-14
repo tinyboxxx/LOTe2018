@@ -2,8 +2,8 @@
 #include <Arduino.h>
 #include <U8g2lib.h>
 #include <SPI.h>
+#include <DueTimer.h>
 
-bool fastboot=0;
 
 
 //U8G2_SSD1322_NHD_256X64_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);	// Enable U8G2_16BIT in u8g2.h
@@ -14,6 +14,7 @@ U8G2_SSD1322_NHD_256X64_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* re
 #define GCenter18 21 //size
 #define GCenter9 11  //half size
 
+bool fastboot=0;
 int rpm = 0;
 int rpm_last = 0;
 int rpm_same = 0;
@@ -39,6 +40,8 @@ int BootedDistance=0;
 
 void setup(void)
 {
+    Timer3.attachInterrupt(tictoc);//start tictoc
+	Timer3.start(1000000); // Calls every 1s
     u8g2.begin(); //from example
     u8g2.clearBuffer();
     bootbmp();
