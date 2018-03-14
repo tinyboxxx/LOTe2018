@@ -9,7 +9,7 @@
 //U8G2_SSD1322_NHD_256X64_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);	// Enable U8G2_16BIT in u8g2.h
 U8G2_SSD1322_NHD_256X64_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);	// Enable U8G2_16BIT in u8g2.h
 
-#define GCenterX 226 //211-229.5-248
+#define GCenterX 233 //211-229.5-248
 #define GCenterY 21  //0-18-37
 #define GCenter18 21 //size
 #define GCenter9 11  //half size
@@ -18,7 +18,7 @@ bool fastboot=0;
 int rpm = 0;
 int rpm_last = 0;
 int rpm_same = 0;
-float spd_hz = 8;
+float spd_hz = 0;
 int spd = 0;
 int temp = 0;
 
@@ -32,7 +32,7 @@ int GForceY = 0;
 int GForceXScreen = GCenterX - 1;
 int GForceYScreen = GCenterY - 1;
 int GearRatioCube = 0;
-float Volt = 0.00;
+float Volt = 3.30;
 long BoostStartTime=0;
 int BootedTime=0;
 int BootDistance=0;
@@ -109,11 +109,11 @@ void loop(void)
     u8g2.drawStr(151, 7, " Temp");
     u8g2.drawStr(68, 7, "Gear");
     u8g2.drawStr(0, 64, "RPM:");
-    u8g2.drawStr(205, 53, "Gx:");
-    u8g2.drawStr(205, 61, "Gy:");
+    u8g2.drawStr(213, 53, "Gx:");
+    u8g2.drawStr(213, 61, "Gy:");
     u8g2.drawStr(0, 7, "Volt");
 
-#define GCenterX 220 //211-229.5-248
+#define GCenterX 233 //211-229.5-248
 #define GCenterY 21  //0-18-37
 #define GCenter18 21 //size
 #define GCenter9 11  //half size
@@ -150,9 +150,13 @@ void loop(void)
 
     u8g2.setFont(u8g2_font_6x10_tf);
 
-    u8g2.setCursor(222, 53);
+    u8g2.setCursor(230, 53);
+    if(GForceX>0)
+    u8g2.print(0);
     u8g2.print(GForceX); //gforcex
-    u8g2.setCursor(222, 53);
+    u8g2.setCursor(230, 61);
+    if(GForceY>0)
+    u8g2.print(0);
     u8g2.print(GForceY); //gforcey
 
     u8g2.setCursor(25, 64);
@@ -168,9 +172,9 @@ void loop(void)
     u8g2.setFont(u8g2_font_logisoso18_tr);
     u8g2.setCursor(0, 52);
     u8g2.print(TimeH); //time
-    u8g2.print(":"）;
+    u8g2.print(":");
     u8g2.print(TimeMM); //time
-    u8g2.print(":"）;
+    u8g2.print(":");
     u8g2.print(TimeSS); //time
       
     u8g2.setCursor(157, 29);
@@ -191,8 +195,8 @@ void loop(void)
     u8g2.print(Volt); //battery
 
     u8g2.setFont(u8g2_font_logisoso34_tn);
-    u8g2.setCursor(105, 47); //speed}
-
+    u8g2.setCursor(105, 47); //speed
+    u8g2.print(spd);
     u8g2.sendBuffer();
 
 }
