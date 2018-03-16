@@ -53,12 +53,6 @@ void setup(void)
 void loop(void)
 {
 
-    // u8g2.clearBuffer();                  // clear the internal memory
-    // u8g2.setFont(u8g2_font_ncenB08_tr);  // choose a suitable font
-    // u8g2.drawStr(0, 10, "Hello World!"); // write something to the internal memory
-    // u8g2.sendBuffer();                   // transfer internal memory to the display
-    // delay(10);
-
     //
     //GetNewData
     spd = random(10, 50);
@@ -103,7 +97,6 @@ void loop(void)
 //
 
     u8g2.clearBuffer();
-
     u8g2.setFont(u8g2_font_6x10_tf);
     u8g2.drawStr(109, 7, "Speed");
     u8g2.drawStr(151, 7, " Temp");
@@ -128,11 +121,10 @@ void loop(void)
 
     //Temp Cube:
     u8g2.drawFrame(152, 11, 4, 19); //211-229.5-248
-                                    //Gear Cube:
+    //Gear Cube:
     u8g2.drawFrame(67, 11, 4, 19);  //211-229.5-248
-                                    //Speed Cube:
+    //Speed Cube:
     u8g2.drawFrame(100, 0, 5, 47);  //211-229.5-248
-
     u8g2.drawBox(GForceXScreen, GForceYScreen, 3, 3); //GForceBox
 
     //-----
@@ -272,51 +264,40 @@ void bootbmp(void)
     u8g2.drawXBMP(65, 0, boot_width, boot_height, boot_bits); 
 };
 
+/*************************************************************************
+//Function to run every seconds
+ *************************************************************************/
 void tictoc() //倒计时读秒
 {
   TimeSS--;
 }
 
-/*
-
-char *ftostr4(float i)
+/*************************************************************************
+//Function to calculate the distance between two waypoints
+ *************************************************************************/
+float calc_dist(float flat1, float flon1, float flat2, float flon2)
 {
-  char buff[13];
-  //sprintf(buff, "%fV",i);
-  dtostrf(i, 1, 2, buff);
-//  strcat(buff, "V");
-  return buff;
-}
+    float dist_calc = 0;
+    float dist_calc2 = 0;
+    float diflat = 0;
+    float diflon = 0;
 
-char *itostr2(int i)
-{
-  char buff[3];
-  sprintf(buff, "%02d", i);
-  //itoa(i, buff, 10);
+    //I've to spplit all the calculation in several steps. If i try to do it in a single line the arduino will explode.
+    diflat = radians(flat2 - flat1);
+    flat1 = radians(flat1);
+    flat2 = radians(flat2);
+    diflon = radians((flon2) - (flon1));
 
-  return buff;
-}
+    dist_calc = (sin(diflat / 2.0) * sin(diflat / 2.0));
+    dist_calc2 = cos(flat1);
+    dist_calc2 *= cos(flat2);
+    dist_calc2 *= sin(diflon / 2.0);
+    dist_calc2 *= sin(diflon / 2.0);
+    dist_calc += dist_calc2;
 
-char *itostr4(int i)
-{
-  char buff[4];
-  sprintf(buff, "%#04d", i);
-  //itoa(i, buff, 10);
-  return buff;
-}
+    dist_calc = (2 * atan2(sqrt(dist_calc), sqrt(1.0 - dist_calc)));
 
-char *itostrtime()
-{
-  char buff[8];
-  sprintf(buff, "%02d:%02d:%02d", TimeH, TimeMM, TimeSS);
-  return buff;
+    dist_calc *= 6371000.0; //Converting to meters
+    //Serial.println(dist_calc);
+    return dist_calc;
 }
-
-char *dtostrf(double val, signed char width, unsigned char prec, char *sout)
-{
-  char fmt[20];
-  sprintf(fmt, "%%%d.%df", width, prec);
-  sprintf(sout, fmt, val);
-  return sout;
-}
-*/
