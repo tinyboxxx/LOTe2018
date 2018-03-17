@@ -99,7 +99,10 @@ void setup(void)
     u8g2.sendBuffer();
     delay(3200);
     u8g2.clearBuffer();
-    Serial.begin(9600);
+    Serial.begin(115200);//debug
+    Serial1.begin(115200);//rpm
+    Serial2.begin(9600);//GPS
+    Serial3.begin(9600);//Wireless
 }
 
 void loop(void)
@@ -367,16 +370,16 @@ void getNewDataFromGPS(void)
 {
 
 if ( processGPS() ) {
-    Serial.print("#SV: ");      Serial.print(pvt.numSV);
-    Serial.print(" fixType: "); Serial.print(pvt.fixType);
-    // Serial.print(" Date:");     Serial.print(pvt.year); Serial.print("/"); Serial.print(pvt.month); Serial.print("/"); 
-    //                             Serial.print(pvt.day); Serial.print(" "); Serial.print(pvt.hour); Serial.print(":"); 
-    //                             Serial.print(pvt.minute); Serial.print(":"); Serial.print(pvt.second);
-    Serial.print(" lat/lon: "); Serial.print(pvt.lat/10000000.0f); Serial.print(","); Serial.print(pvt.lon/10000000.0f);
-    Serial.print(" gSpeed: ");  Serial.print(pvt.gSpeed/1000.0f);
-    Serial.print(" heading: "); Serial.print(pvt.headMot/100000.0f);
-    Serial.print(" hAcc: ");    Serial.print(pvt.hAcc/1000.0f);
-    Serial.println();
+    Serial2.print("#SV: ");      Serial2.print(pvt.numSV);
+    Serial2.print(" fixType: "); Serial2.print(pvt.fixType);
+    // Serial2.print(" Date:");     Serial2.print(pvt.year); Serial2.print("/"); Serial2.print(pvt.month); Serial2.print("/"); 
+    //                             Serial2.print(pvt.day); Serial2.print(" "); Serial2.print(pvt.hour); Serial2.print(":"); 
+    //                             Serial2.print(pvt.minute); Serial2.print(":"); Serial2.print(pvt.second);
+    Serial2.print(" lat/lon: "); Serial2.print(pvt.lat/10000000.0f); Serial2.print(","); Serial2.print(pvt.lon/10000000.0f);
+    Serial2.print(" gSpeed: ");  Serial2.print(pvt.gSpeed/1000.0f);
+    Serial2.print(" heading: "); Serial2.print(pvt.headMot/100000.0f);
+    Serial2.print(" hAcc: ");    Serial2.print(pvt.hAcc/1000.0f);
+    Serial2.println();
   }
 
 }
@@ -397,9 +400,9 @@ bool processGPS()
     static unsigned char checksum[2];
     const int payloadSize = sizeof(NAV_PVT);
 
-    while (Serial3.available())
+    while (Serial2.available())
     {
-        byte c = Serial3.read();
+        byte c = Serial2.read();
         if (fpos < 2)
         {
             if (c == UBX_HEADER[fpos])
