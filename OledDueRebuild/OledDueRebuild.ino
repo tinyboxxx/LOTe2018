@@ -48,6 +48,7 @@ void setup(void)
     u8g2.sendBuffer();
     delay(3200);
     u8g2.clearBuffer();
+    Serial.begin(9600);
 }
 
 void loop(void)
@@ -64,6 +65,7 @@ void loop(void)
     GForceYScreen = GForceY / 60 + GCenterY - 1;
     GearRatio = random(0, 9);
     Volt -= 0.01;
+    Serial.print("#R");Serial.print(rpm);Serial.print("@");
     //
 
     //data Process
