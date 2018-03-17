@@ -4,7 +4,10 @@
 #include <SPI.h>
 #include <DueTimer.h>
 
-
+//Serial0.debug; 
+//Serial1.rpm;
+//Serial2.GPS;
+//Serial3.Wireless;
 
 //U8G2_SSD1322_NHD_256X64_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);	// Enable U8G2_16BIT in u8g2.h
 U8G2_SSD1322_NHD_256X64_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);	// Enable U8G2_16BIT in u8g2.h
@@ -38,6 +41,54 @@ int BootedTime=0;
 int BootDistance=0;
 int BootedDistance=0;
 
+const unsigned char UBX_HEADER[] = {0xB5, 0x62};
+
+struct NAV_PVT
+{
+
+    unsigned char cls;
+    unsigned char id;
+    unsigned short len;
+    unsigned long iTOW; // GPS time of week of the navigation epoch (ms)
+
+    unsigned short year;   // Year (UTC)
+    unsigned char month;   // Month, range 1..12 (UTC)
+    unsigned char day;     // Day of month, range 1..31 (UTC)
+    unsigned char hour;    // Hour of day, range 0..23 (UTC)
+    unsigned char minute;  // Minute of hour, range 0..59 (UTC)
+    unsigned char second;  // Seconds of minute, range 0..60 (UTC)
+    char valid;            // Validity Flags (see graphic below)
+    unsigned long tAcc;    // Time accuracy estimate (UTC) (ns)
+    long nano;             // Fraction of second, range -1e9 .. 1e9 (UTC) (ns)
+    unsigned char fixType; // GNSSfix Type, range 0..5
+    char flags;            // Fix Status Flags
+    char flags2;           // reserved
+    unsigned char numSV;   // Number of satellites used in Nav Solution
+
+    long lon;           // Longitude (deg)
+    long lat;           // Latitude (deg)
+    long height;        // Height above Ellipsoid (mm)
+    long hMSL;          // Height above mean sea level (mm)
+    unsigned long hAcc; // Horizontal Accuracy Estimate (mm)
+    unsigned long vAcc; // Vertical Accuracy Estimate (mm)
+
+    long velN;             // NED north velocity (mm/s)
+    long velE;             // NED east velocity (mm/s)
+    long velD;             // NED down velocity (mm/s)
+    long gSpeed;           // Ground Speed (2-D) (mm/s)
+    long headMot;          // Heading of motion 2-D (deg)
+    unsigned long sAcc;    // Speed Accuracy Estimate
+    unsigned long headAcc; // Heading Accuracy Estimate
+    unsigned short pDOP;   // Position dilution of precision
+    unsigned short reserved1;
+    unsigned long reserved;
+    long headVeh;
+    short magDec;          // Reserved
+    unsigned short magACC; // Reserved
+};
+
+NAV_PVT pvt;
+
 void setup(void)
 {
     Timer3.attachInterrupt(tictoc);//start tictoc
@@ -58,14 +109,15 @@ void loop(void)
     //GetNewData
     spd = random(10, 50);
     temp = random(28, 50);
-    rpm = random(2700, 3800);
+    //rpm = random(2700, 3800);
+    getNewDataFromRPM();
     GForceX = random(-900, 900);
     GForceY = random(-300, 300);
     GForceXScreen = GForceX / 60 + GCenterX - 1;
     GForceYScreen = GForceY / 60 + GCenterY - 1;
     GearRatio = random(0, 9);
     Volt -= 0.01;
-    Serial.print("#R");Serial.print(rpm);Serial.print("@");
+    Serial3.print("R");Serial3.print(rpm);Serial3.print("@");
     //
 
     //data Process
@@ -302,4 +354,88 @@ float calc_dist(float flat1, float flon1, float flat2, float flon2)
     dist_calc *= 6371000.0; //Converting to meters
     //Serial.println(dist_calc);
     return dist_calc;
+}
+
+void getNewDataFromRPM(void)
+{
+    char terminator = '@';
+    if (Serial.available() > 0 && Serial.read() == 'R')
+       rpm = Serial.readStringUntil(terminator).toInt();
+}
+
+void getNewDataFromGPS(void)
+{
+
+if ( processGPS() ) {
+    Serial.print("#SV: ");      Serial.print(pvt.numSV);
+    Serial.print(" fixType: "); Serial.print(pvt.fixType);
+    // Serial.print(" Date:");     Serial.print(pvt.year); Serial.print("/"); Serial.print(pvt.month); Serial.print("/"); 
+    //                             Serial.print(pvt.day); Serial.print(" "); Serial.print(pvt.hour); Serial.print(":"); 
+    //                             Serial.print(pvt.minute); Serial.print(":"); Serial.print(pvt.second);
+    Serial.print(" lat/lon: "); Serial.print(pvt.lat/10000000.0f); Serial.print(","); Serial.print(pvt.lon/10000000.0f);
+    Serial.print(" gSpeed: ");  Serial.print(pvt.gSpeed/1000.0f);
+    Serial.print(" heading: "); Serial.print(pvt.headMot/100000.0f);
+    Serial.print(" hAcc: ");    Serial.print(pvt.hAcc/1000.0f);
+    Serial.println();
+  }
+
+}
+
+void calcChecksum(unsigned char *CK)
+{
+    memset(CK, 0, 2);
+    for (int i = 0; i < (int)sizeof(NAV_PVT); i++)
+    {
+        CK[0] += ((unsigned char *)(&pvt))[i];
+        CK[1] += CK[0];
+    }
+}
+
+bool processGPS()
+{
+    static int fpos = 0;
+    static unsigned char checksum[2];
+    const int payloadSize = sizeof(NAV_PVT);
+
+    while (Serial3.available())
+    {
+        byte c = Serial3.read();
+        if (fpos < 2)
+        {
+            if (c == UBX_HEADER[fpos])
+                fpos++;
+            else
+                fpos = 0;
+        }
+        else
+        {
+            if ((fpos - 2) < payloadSize)
+                ((unsigned char *)(&pvt))[fpos - 2] = c;
+
+            fpos++;
+
+            if (fpos == (payloadSize + 2))
+            {
+                calcChecksum(checksum);
+            }
+            else if (fpos == (payloadSize + 3))
+            {
+                if (c != checksum[0])
+                    fpos = 0;
+            }
+            else if (fpos == (payloadSize + 4))
+            {
+                fpos = 0;
+                if (c == checksum[1])
+                {
+                    return true;
+                }
+            }
+            else if (fpos > (payloadSize + 4))
+            {
+                fpos = 0;
+            }
+        }
+    }
+    return false;
 }
