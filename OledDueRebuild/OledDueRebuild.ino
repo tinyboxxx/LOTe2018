@@ -355,7 +355,7 @@ float calc_dist(float flat1, float flon1, float flat2, float flon2)
     dist_calc = (2 * atan2(sqrt(dist_calc), sqrt(1.0 - dist_calc)));
 
     dist_calc *= 6371000.0; //Converting to meters
-    //Serial.println(dist_calc);
+    Serial.println(dist_calc);
     return dist_calc;
 }
 
@@ -370,16 +370,16 @@ void getNewDataFromGPS(void)
 {
 
 if ( processGPS() ) {
-    Serial2.print("#SV: ");      Serial2.print(pvt.numSV);
-    Serial2.print(" fixType: "); Serial2.print(pvt.fixType);
-    // Serial2.print(" Date:");     Serial2.print(pvt.year); Serial2.print("/"); Serial2.print(pvt.month); Serial2.print("/"); 
-    //                             Serial2.print(pvt.day); Serial2.print(" "); Serial2.print(pvt.hour); Serial2.print(":"); 
-    //                             Serial2.print(pvt.minute); Serial2.print(":"); Serial2.print(pvt.second);
-    Serial2.print(" lat/lon: "); Serial2.print(pvt.lat/10000000.0f); Serial2.print(","); Serial2.print(pvt.lon/10000000.0f);
-    Serial2.print(" gSpeed: ");  Serial2.print(pvt.gSpeed/1000.0f);
-    Serial2.print(" heading: "); Serial2.print(pvt.headMot/100000.0f);
-    Serial2.print(" hAcc: ");    Serial2.print(pvt.hAcc/1000.0f);
-    Serial2.println();
+    Serial.print("#SV: ");      Serial.print(pvt.numSV);
+    Serial.print(" fixType: "); Serial.print(pvt.fixType);
+    // Serial.print(" Date:");     Serial.print(pvt.year); Serial.print("/"); Serial.print(pvt.month); Serial.print("/"); 
+    //                             Serial.print(pvt.day); Serial.print(" "); Serial.print(pvt.hour); Serial.print(":"); 
+    //                             Serial.print(pvt.minute); Serial.print(":"); Serial.print(pvt.second);
+    Serial.print(" lat/lon: "); Serial.print(pvt.lat/10000000.0f); Serial.print(","); Serial.print(pvt.lon/10000000.0f);
+    Serial.print(" gSpeed: ");  Serial.print(pvt.gSpeed/1000.0f);
+    Serial.print(" heading: "); Serial.print(pvt.headMot/100000.0f);
+    Serial.print(" hAcc: ");    Serial.print(pvt.hAcc/1000.0f);
+    Serial.println();
   }
 
 }
