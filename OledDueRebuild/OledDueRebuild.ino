@@ -2,14 +2,12 @@
 #include <Arduino.h>
 #include <U8g2lib.h>
 #include <SPI.h>
-#include <DueTimer.h>
 
 //Serial0.debug; 
 //Serial1.rpm;
 //Serial2.GPS;
 //Serial3.Wireless;
 
-//U8G2_SSD1322_NHD_256X64_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 13, /* data=*/ 11, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);	// Enable U8G2_16BIT in u8g2.h
 U8G2_SSD1322_NHD_256X64_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);	// Enable U8G2_16BIT in u8g2.h
 
 #define GCenterX 233 //211-229.5-248
@@ -380,7 +378,6 @@ if ( processGPS() ) {
     Serial.print(" hAcc: ");    Serial.print(pvt.hAcc/1000.0f);
     Serial.println();
   }
-
 }
 
 void calcChecksum(unsigned char *CK)
