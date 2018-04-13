@@ -361,9 +361,8 @@ float calc_dist(float flat1, float flon1, float flat2, float flon2)
 
 void getNewDataFromRPM(void)
 {
-    char terminator = '@';
-    if (Serial.available() > 0 && Serial.read() == 'R')
-       rpm = Serial.readStringUntil(terminator).toInt();
+    if (Serial1.available() > 0 && Serial1.read() == 'R')
+       rpm = Serial1.readStringUntil('@').toInt();
 }
 
 void getNewDataFromGPS(void)
