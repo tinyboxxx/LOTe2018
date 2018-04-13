@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <U8g2lib.h>
 #include <SPI.h>
+#include <DueTimer.h>
 
 //Serial0.debug; 
 //Serial1.rpm;
@@ -93,10 +94,10 @@ void setup(void)
     Timer3.start(1000000); // Calls every 1s
     u8g2.begin(); //from example
     u8g2.clearBuffer();
-    bootbmp();
-    u8g2.sendBuffer();
-    delay(3200);
-    u8g2.clearBuffer();
+//    bootbmp();
+//    u8g2.sendBuffer();
+//    delay(3200);
+//    u8g2.clearBuffer();
     Serial.begin(115200);//debug
     Serial1.begin(115200);//rpm
     Serial2.begin(9600);//GPS
@@ -119,6 +120,7 @@ void loop(void)
     GearRatio = random(0, 9);
     Volt -= 0.01;
     Serial3.print("R");Serial3.print(rpm);Serial3.print("@");
+    Serial.print("R");Serial.print(rpm);Serial.print("@");
     //
 
     //data Process
@@ -207,7 +209,7 @@ void loop(void)
     u8g2.print(GForceY); //gforcey
 
     u8g2.setCursor(25, 64);
-    if (rpm >= 999 && rpm <= 4000)
+    if (rpm >= 999 && rpm <= 9000)
     {
         u8g2.print(rpm); //rpm
     }
@@ -359,8 +361,13 @@ float calc_dist(float flat1, float flon1, float flat2, float flon2)
 
 void getNewDataFromRPM(void)
 {
+  int rpmtemp=0;
     if (Serial1.available() > 0 && Serial1.read() == 'R')
-       rpm = Serial1.readStringUntil('@').toInt();
+       rpmtemp = Serial1.readStringUntil('@').toInt();
+           if (rpmtemp >= 999 && rpmtemp <= 9000)
+    {
+        rpm=rpmtemp;
+    }
 }
 
 void getNewDataFromGPS(void)
