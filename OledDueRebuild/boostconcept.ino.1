@@ -1,9 +1,9 @@
-while(boostmode=1)
+while(boostmode==1)
 {
     if(speed<0.1)
     {
         print("ready to boost")
-        if(GPS.Signal=0)
+        if(GPS.Signal==0)
         {
             boostcircle=0;
             useGPS=false;
