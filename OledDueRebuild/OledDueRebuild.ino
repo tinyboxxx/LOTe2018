@@ -93,22 +93,22 @@ NAV_PVT pvt;
 
 void setup(void)
 {
-    Timer3.attachInterrupt(tictoc);//start tictoc
-    Timer3.start(1000000); // Calls every 1s
-    u8g2.begin(); //from example
+    Timer3.attachInterrupt(tictoc); //start tictoc
+    Timer3.start(1000000);          // Calls every 1s
+    u8g2.begin();                   //from example
     u8g2.clearBuffer();
-//    bootbmp();
-//    u8g2.sendBuffer();
-//    delay(3200);
-//    u8g2.clearBuffer();
-    Serial.begin(115200);//debug
-    Serial1.begin(115200);//rpm
-    Serial2.begin(115200);//GPS
-    Serial3.begin(9600);//Wireless
-  while (!Serial) ; // wait for serial
-  delay(200);
-  Serial.println("DS1307RTC Read Test");
-  Serial.println("-------------------");
+    //    bootbmp();
+    //    u8g2.sendBuffer();
+    //    delay(3200);
+    //    u8g2.clearBuffer();
+    Serial.begin(115200);  //debug
+    Serial1.begin(115200); //rpm
+    Serial2.begin(115200); //GPS
+    Serial3.begin(9600);   //Wireless
+    while (!Serial)
+        ; // wait for serial
+    delay(200);
+
 }
 
 void loop(void)
@@ -127,36 +127,39 @@ void loop(void)
     GearRatio = random(0, 9);
     Volt -= 0.01;
     Serial3.print("R");Serial3.print(rpm);Serial3.print("@");
-    //Serial.print("R");Serial.print(rpm);Serial.print("@");
-    //
-//   tmElements_t tm;
-//  if (RTC.read(tm)) {
-//     Serial.print("Ok, Time = ");
-//     print2digits(tm.Hour);
-//     Serial.write(':');
-//     print2digits(tm.Minute);
-//     Serial.write(':');
-//     print2digits(tm.Second);
-//     Serial.print(", Date (D/M/Y) = ");
-//     Serial.print(tm.Day);
-//     Serial.write('/');
-//     Serial.print(tm.Month);
-//     Serial.write('/');
-//     Serial.print(tmYearToCalendar(tm.Year));
-//     Serial.println();
-//   } else {
-//     if (RTC.chipPresent()) {
-//       Serial.println("The DS1307 is stopped.  Please run the SetTime");
-//       Serial.println("example to initialize the time and begin running.");
-//       Serial.println();
-//     } else {
-//       Serial.println("DS1307 read error!  Please check the circuitry.");
-//       Serial.println();
-//     }
-//   }
+    Serial.print("R");Serial.print(rpm);Serial.print("@");
 
-
-    
+    tmElements_t tm;
+    if (RTC.read(tm))
+    {
+        Serial.print("Ok, Time = ");
+        print2digits(tm.Hour);
+        Serial.write(':');
+        print2digits(tm.Minute);
+        Serial.write(':');
+        print2digits(tm.Second);
+        Serial.print(", Date (D/M/Y) = ");
+        Serial.print(tm.Day);
+        Serial.write('/');
+        Serial.print(tm.Month);
+        Serial.write('/');
+        Serial.print(tmYearToCalendar(tm.Year));
+        Serial.println();
+    }
+    else
+    {
+        if (RTC.chipPresent())
+        {
+            Serial.println("The DS1307 is stopped.  Please run the SetTime");
+            Serial.println("example to initialize the time and begin running.");
+            Serial.println();
+        }
+        else
+        {
+            Serial.println("DS1307 read error!  Please check the circuitry.");
+            Serial.println();
+        }
+    }
 
     //data Process
     if (rpm_last == rpm) //Drop Outdate RPM
@@ -165,6 +168,10 @@ void loop(void)
             rpm = 0;
         else
             rpm_same++;
+    }
+    else
+    {
+        rpm=rpm_last;
     }
 
     if (TimeSS == -1)
@@ -244,7 +251,7 @@ void loop(void)
     u8g2.print(GForceY); //gforcey
 
     u8g2.setCursor(25, 64);
-    if (rpm >= 999 && rpm <= 9000)
+    if (rpm > 999 && rpm <= 4000)
     {
         u8g2.print(rpm); //rpm
     }
@@ -260,7 +267,7 @@ void loop(void)
     u8g2.print(TimeMM); //time
     u8g2.print(":");
     u8g2.print(TimeSS); //time
-      
+    
     u8g2.setCursor(157, 29);
     u8g2.print(temp);
 
@@ -287,6 +294,139 @@ getNewDataFromGPS();
 
 }
 
+
+/*************************************************************************
+//Function to run every seconds
+ *************************************************************************/
+void tictoc() //倒计时读秒
+{
+  TimeSS--;
+}
+
+/*************************************************************************
+//Function to calculate the distance between two waypoints
+ *************************************************************************/
+float calc_dist(float flat1, float flon1, float flat2, float flon2)
+{
+    float dist_calc = 0;
+    float dist_calc2 = 0;
+    float diflat = 0;
+    float diflon = 0;
+
+    //I've to spplit all the calculation in several steps. If i try to do it in a single line the arduino will explode.
+    diflat = radians(flat2 - flat1);
+    flat1 = radians(flat1);
+    flat2 = radians(flat2);
+    diflon = radians((flon2) - (flon1));
+
+    dist_calc = (sin(diflat / 2.0) * sin(diflat / 2.0));
+    dist_calc2 = cos(flat1);
+    dist_calc2 *= cos(flat2);
+    dist_calc2 *= sin(diflon / 2.0);
+    dist_calc2 *= sin(diflon / 2.0);
+    dist_calc += dist_calc2;
+
+    dist_calc = (2 * atan2(sqrt(dist_calc), sqrt(1.0 - dist_calc)));
+
+    dist_calc *= 6371000.0; //Converting to meters
+    Serial.println(dist_calc);
+    return dist_calc;
+}
+
+void getNewDataFromRPM(void)
+{
+    int rpmtemp = 0;
+    if (Serial1.available() > 0 && Serial1.read() == 'R')
+    {
+        rpmtemp = Serial1.readStringUntil('@').toInt();
+        if (rpmtemp > 999 && rpmtemp <= 9000)
+            rpm = rpmtemp;
+    }
+}
+
+void getNewDataFromGPS(void)
+{
+
+if ( processGPS() ) {
+    Serial.print("#SV: ");      Serial.print(pvt.numSV);
+    Serial.print(" fixType: "); Serial.print(pvt.fixType);
+    Serial.print(" Date:");     Serial.print(pvt.year); Serial.print("/"); Serial.print(pvt.month); Serial.print("/"); 
+                                Serial.print(pvt.day); Serial.print(" "); Serial.print(pvt.hour); Serial.print(":"); 
+                                Serial.print(pvt.minute); Serial.print(":"); Serial.print(pvt.second);
+    Serial.print(" lat/lon: "); Serial.print(pvt.lat/10000000.0f); Serial.print(","); Serial.print(pvt.lon/10000000.0f);
+    Serial.print(" gSpeed: ");  Serial.print(pvt.gSpeed/1000.0f);
+    Serial.print(" heading: "); Serial.print(pvt.headMot/100000.0f);
+    Serial.print(" hAcc: ");    Serial.print(pvt.hAcc/1000.0f);
+    Serial.println();
+  }
+}
+
+void calcChecksum(unsigned char *CK)
+{
+    memset(CK, 0, 2);
+    for (int i = 0; i < (int)sizeof(NAV_PVT); i++)
+    {
+        CK[0] += ((unsigned char *)(&pvt))[i];
+        CK[1] += CK[0];
+    }
+}
+
+bool processGPS()
+{
+    static int fpos = 0;
+    static unsigned char checksum[2];
+    const int payloadSize = sizeof(NAV_PVT);
+
+    while (Serial2.available())
+    {
+        byte c = Serial2.read();
+        if (fpos < 2)
+        {
+            if (c == UBX_HEADER[fpos])
+                fpos++;
+            else
+                fpos = 0;
+        }
+        else
+        {
+            if ((fpos - 2) < payloadSize)
+                ((unsigned char *)(&pvt))[fpos - 2] = c;
+            fpos++;
+            if (fpos == (payloadSize + 2))
+                calcChecksum(checksum);
+            else if (fpos == (payloadSize + 3))
+            {
+                if (c != checksum[0])
+                    fpos = 0;
+            }
+            else if (fpos == (payloadSize + 4))
+            {
+                fpos = 0;
+                if (c == checksum[1])
+                    return true;
+            }
+            else if (fpos > (payloadSize + 4))
+                fpos = 0;
+        }
+    }
+    return false;
+}
+
+void print2digits(int number) {
+  if (number >= 0 && number < 10) {
+    Serial.write('0');
+  }
+  Serial.print(number);
+}
+void SyncGpsTimeToRTC(void)
+{
+    Serial.print(pvt.year);
+    Serial.print(pvt.month);
+    Serial.print(pvt.day);
+    Serial.print(pvt.hour);
+    Serial.print(pvt.minute);
+    Serial.print(pvt.second);
+}
 
 void bootbmp(void)
 {
@@ -357,135 +497,3 @@ void bootbmp(void)
 #define boot_height 60
     u8g2.drawXBMP(65, 0, boot_width, boot_height, boot_bits); 
 };
-
-/*************************************************************************
-//Function to run every seconds
- *************************************************************************/
-void tictoc() //倒计时读秒
-{
-  TimeSS--;
-}
-
-/*************************************************************************
-//Function to calculate the distance between two waypoints
- *************************************************************************/
-float calc_dist(float flat1, float flon1, float flat2, float flon2)
-{
-    float dist_calc = 0;
-    float dist_calc2 = 0;
-    float diflat = 0;
-    float diflon = 0;
-
-    //I've to spplit all the calculation in several steps. If i try to do it in a single line the arduino will explode.
-    diflat = radians(flat2 - flat1);
-    flat1 = radians(flat1);
-    flat2 = radians(flat2);
-    diflon = radians((flon2) - (flon1));
-
-    dist_calc = (sin(diflat / 2.0) * sin(diflat / 2.0));
-    dist_calc2 = cos(flat1);
-    dist_calc2 *= cos(flat2);
-    dist_calc2 *= sin(diflon / 2.0);
-    dist_calc2 *= sin(diflon / 2.0);
-    dist_calc += dist_calc2;
-
-    dist_calc = (2 * atan2(sqrt(dist_calc), sqrt(1.0 - dist_calc)));
-
-    dist_calc *= 6371000.0; //Converting to meters
-    Serial.println(dist_calc);
-    return dist_calc;
-}
-
-void getNewDataFromRPM(void)
-{
-    int rpmtemp = 0;
-    if (Serial1.available() > 0 && Serial1.read() == 'R')
-    {
-        rpmtemp = Serial1.readStringUntil('@').toInt();
-        if (rpmtemp >= 999 && rpmtemp <= 9000)
-            rpm = rpmtemp;
-    }
-}
-
-void getNewDataFromGPS(void)
-{
-
-if ( processGPS() ) {
-    Serial.print("#SV: ");      Serial.print(pvt.numSV);
-    Serial.print(" fixType: "); Serial.print(pvt.fixType);
-    // Serial.print(" Date:");     Serial.print(pvt.year); Serial.print("/"); Serial.print(pvt.month); Serial.print("/"); 
-    //                             Serial.print(pvt.day); Serial.print(" "); Serial.print(pvt.hour); Serial.print(":"); 
-    //                             Serial.print(pvt.minute); Serial.print(":"); Serial.print(pvt.second);
-    Serial.print(" lat/lon: "); Serial.print(pvt.lat/10000000.0f); Serial.print(","); Serial.print(pvt.lon/10000000.0f);
-    Serial.print(" gSpeed: ");  Serial.print(pvt.gSpeed/1000.0f);
-    Serial.print(" heading: "); Serial.print(pvt.headMot/100000.0f);
-    Serial.print(" hAcc: ");    Serial.print(pvt.hAcc/1000.0f);
-    Serial.println();
-  }
-}
-
-void calcChecksum(unsigned char *CK)
-{
-    memset(CK, 0, 2);
-    for (int i = 0; i < (int)sizeof(NAV_PVT); i++)
-    {
-        CK[0] += ((unsigned char *)(&pvt))[i];
-        CK[1] += CK[0];
-    }
-}
-
-bool processGPS()
-{
-    static int fpos = 0;
-    static unsigned char checksum[2];
-    const int payloadSize = sizeof(NAV_PVT);
-
-    while (Serial2.available())
-    {
-        byte c = Serial2.read();
-        if (fpos < 2)
-        {
-            if (c == UBX_HEADER[fpos])
-                fpos++;
-            else
-                fpos = 0;
-        }
-        else
-        {
-            if ((fpos - 2) < payloadSize)
-                ((unsigned char *)(&pvt))[fpos - 2] = c;
-
-            fpos++;
-
-            if (fpos == (payloadSize + 2))
-            {
-                calcChecksum(checksum);
-            }
-            else if (fpos == (payloadSize + 3))
-            {
-                if (c != checksum[0])
-                    fpos = 0;
-            }
-            else if (fpos == (payloadSize + 4))
-            {
-                fpos = 0;
-                if (c == checksum[1])
-                {
-                    return true;
-                }
-            }
-            else if (fpos > (payloadSize + 4))
-            {
-                fpos = 0;
-            }
-        }
-    }
-    return false;
-}
-
-void print2digits(int number) {
-  if (number >= 0 && number < 10) {
-    Serial.write('0');
-  }
-  Serial.print(number);
-}
