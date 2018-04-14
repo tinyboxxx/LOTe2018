@@ -361,12 +361,12 @@ float calc_dist(float flat1, float flon1, float flat2, float flon2)
 
 void getNewDataFromRPM(void)
 {
-  int rpmtemp=0;
+    int rpmtemp = 0;
     if (Serial1.available() > 0 && Serial1.read() == 'R')
-       rpmtemp = Serial1.readStringUntil('@').toInt();
-           if (rpmtemp >= 999 && rpmtemp <= 9000)
     {
-        rpm=rpmtemp;
+        rpmtemp = Serial1.readStringUntil('@').toInt();
+        if (rpmtemp >= 999 && rpmtemp <= 9000)
+            rpm = rpmtemp;
     }
 }
 
