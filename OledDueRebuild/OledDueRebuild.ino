@@ -6,13 +6,20 @@
 #include <Wire.h>
 #include <TimeLib.h>
 #include <DS1307RTC.h>
+#include <Adafruit_MLX90614.h>
+
+// temperature Adafruit_MLX90614:
+// SCL => 21
+// SDA => 20
 
 //Serial0.debug; 
-//Serial1.rpm;1
+//Serial1.rpm;
 //Serial2.GPS;
 //Serial3.Wireless;
 
 U8G2_SSD1322_NHD_256X64_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);	// Enable U8G2_16BIT in u8g2.h
+
+Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 
 #define GCenterX 233 //211-229.5-248
 #define GCenterY 21  //0-18-37
@@ -28,7 +35,6 @@ int spd = 0;
 int temp = 0;
 
 int GearRatio = 0; //0.43-3.0
-//#define GearRatioConstant = 0.17522;
 int TimeH = 3;
 int TimeMM = 59;
 int TimeSS = 59;
@@ -97,6 +103,7 @@ void setup(void)
     Timer3.start(1000000);          // Calls every 1s
     u8g2.begin();                   //from example
     u8g2.clearBuffer();
+    mlx.begin();
     //    bootbmp();
     //    u8g2.sendBuffer();
     //    delay(3200);
@@ -105,9 +112,6 @@ void setup(void)
     Serial1.begin(115200); //rpm
     Serial2.begin(115200); //GPS
     Serial3.begin(9600);   //Wireless
-    while (!Serial)
-        ; // wait for serial
-    delay(200);
 
 }
 
@@ -117,47 +121,55 @@ void loop(void)
     //
     //GetNewData
     spd = random(10, 50);
-    temp = random(28, 50);
-    //rpm = random(2700, 3800);
-    getNewDataFromRPM();
+    mlx.readAmbientTempC();
+    temp = lx.readObjectTempC();
+    rpm = getNewDataFromRPM();
     GForceX = random(-900, 900);
     GForceY = random(-300, 300);
     GForceXScreen = GForceX / 60 + GCenterX - 1;
     GForceYScreen = GForceY / 60 + GCenterY - 1;
-    GearRatio = random(0, 9);
+    GearRatio = random(0, 9);//#define GearRatioConstant = 0.17522;
     Volt -= 0.01;
+
+
     Serial3.print("R");Serial3.print(rpm);Serial3.print("@");
     Serial.print("R");Serial.print(rpm);Serial.print("@");
 
     tmElements_t tm;
-    if (RTC.read(tm))
+    int tmi=0;
+    tmi++;
+    if (tmi / 30 == 1)
     {
-        Serial.print("Ok, Time = ");
-        print2digits(tm.Hour);
-        Serial.write(':');
-        print2digits(tm.Minute);
-        Serial.write(':');
-        print2digits(tm.Second);
-        Serial.print(", Date (D/M/Y) = ");
-        Serial.print(tm.Day);
-        Serial.write('/');
-        Serial.print(tm.Month);
-        Serial.write('/');
-        Serial.print(tmYearToCalendar(tm.Year));
-        Serial.println();
-    }
-    else
-    {
-        if (RTC.chipPresent())
+        tmi=0;
+        if (RTC.read(tm))
         {
-            Serial.println("The DS1307 is stopped.  Please run the SetTime");
-            Serial.println("example to initialize the time and begin running.");
+            Serial.print("Ok, Time = ");
+            print2digits(tm.Hour);
+            Serial.write(':');
+            print2digits(tm.Minute);
+            Serial.write(':');
+            print2digits(tm.Second);
+            Serial.print(", Date (D/M/Y) = ");
+            Serial.print(tm.Day);
+            Serial.write('/');
+            Serial.print(tm.Month);
+            Serial.write('/');
+            Serial.print(tmYearToCalendar(tm.Year));
             Serial.println();
         }
         else
         {
-            Serial.println("DS1307 read error!  Please check the circuitry.");
-            Serial.println();
+            if (RTC.chipPresent())
+            {
+                Serial.println("The DS1307 is stopped.  Please run the SetTime");
+                Serial.println("example to initialize the time and begin running.");
+                Serial.println();
+            }
+            else
+            {
+                Serial.println("DS1307 read error!  Please check the circuitry.");
+                Serial.println();
+            }
         }
     }
 
@@ -333,14 +345,14 @@ float calc_dist(float flat1, float flon1, float flat2, float flon2)
     return dist_calc;
 }
 
-void getNewDataFromRPM(void)
+int getNewDataFromRPM(void)
 {
     int rpmtemp = 0;
     if (Serial1.available() > 0 && Serial1.read() == 'R')
     {
         rpmtemp = Serial1.readStringUntil('@').toInt();
         if (rpmtemp > 999 && rpmtemp <= 9000)
-            rpm = rpmtemp;
+            return rpmtemp;
     }
 }
 
