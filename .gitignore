@@ -1,3 +1,5 @@
+*.DS_Store
+
 # Prerequisites
 *.d
 
@@ -35,3 +37,5 @@ OledDueRebuild/.vscode/arduino.json
 OledDueRebuild/.build/OledDueRebuild/sketch/OledDueRebuild.ino.cpp
 OledDueRebuild/.build/OledDueRebuild/build.options.json
 OledDueRebuild/.build/OledDueRebuild/includes.cache
+.DS_Store
+.DS_Store
