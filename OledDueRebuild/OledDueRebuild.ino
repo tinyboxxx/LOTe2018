@@ -122,7 +122,7 @@ void loop(void)
     //GetNewData
     spd = random(10, 50);
     mlx.readAmbientTempC();
-    temp = lx.readObjectTempC();
+    temp = mlx.readObjectTempC();
     rpm = getNewDataFromRPM();
     GForceX = random(-900, 900);
     GForceY = random(-300, 300);
@@ -130,10 +130,11 @@ void loop(void)
     GForceYScreen = GForceY / 60 + GCenterY - 1;
     GearRatio = random(0, 9);//#define GearRatioConstant = 0.17522;
     Volt -= 0.01;
+    getNewDataFromGPS();
 
 
-    Serial3.print("R");Serial3.print(rpm);Serial3.print("@");
-    Serial.print("R");Serial.print(rpm);Serial.print("@");
+    // Serial3.print("R");Serial3.print(rpm);Serial3.print("@");
+    // Serial.print("R");Serial.print(rpm);Serial.print("@");
 
     tmElements_t tm;
     int tmi=0;
@@ -302,7 +303,7 @@ void loop(void)
     u8g2.print(spd);
     u8g2.sendBuffer();
 
-getNewDataFromGPS();
+
 
 }
 
