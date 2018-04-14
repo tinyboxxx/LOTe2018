@@ -8,7 +8,7 @@
 #include <DS1307RTC.h>
 
 //Serial0.debug; 
-//Serial1.rpm;
+//Serial1.rpm;1
 //Serial2.GPS;
 //Serial3.Wireless;
 
@@ -103,7 +103,7 @@ void setup(void)
 //    u8g2.clearBuffer();
     Serial.begin(115200);//debug
     Serial1.begin(115200);//rpm
-    Serial2.begin(9600);//GPS
+    Serial2.begin(115200);//GPS
     Serial3.begin(9600);//Wireless
   while (!Serial) ; // wait for serial
   delay(200);
@@ -127,34 +127,33 @@ void loop(void)
     GearRatio = random(0, 9);
     Volt -= 0.01;
     Serial3.print("R");Serial3.print(rpm);Serial3.print("@");
-    Serial.print("R");Serial.print(rpm);Serial.print("@");
+    //Serial.print("R");Serial.print(rpm);Serial.print("@");
     //
-  tmElements_t tm;
- if (RTC.read(tm)) {
-    Serial.print("Ok, Time = ");
-    print2digits(tm.Hour);
-    Serial.write(':');
-    print2digits(tm.Minute);
-    Serial.write(':');
-    print2digits(tm.Second);
-    Serial.print(", Date (D/M/Y) = ");
-    Serial.print(tm.Day);
-    Serial.write('/');
-    Serial.print(tm.Month);
-    Serial.write('/');
-    Serial.print(tmYearToCalendar(tm.Year));
-    Serial.println();
-  } else {
-    if (RTC.chipPresent()) {
-      Serial.println("The DS1307 is stopped.  Please run the SetTime");
-      Serial.println("example to initialize the time and begin running.");
-      Serial.println();
-    } else {
-      Serial.println("DS1307 read error!  Please check the circuitry.");
-      Serial.println();
-    }
-    delay(9000);
-  }
+//   tmElements_t tm;
+//  if (RTC.read(tm)) {
+//     Serial.print("Ok, Time = ");
+//     print2digits(tm.Hour);
+//     Serial.write(':');
+//     print2digits(tm.Minute);
+//     Serial.write(':');
+//     print2digits(tm.Second);
+//     Serial.print(", Date (D/M/Y) = ");
+//     Serial.print(tm.Day);
+//     Serial.write('/');
+//     Serial.print(tm.Month);
+//     Serial.write('/');
+//     Serial.print(tmYearToCalendar(tm.Year));
+//     Serial.println();
+//   } else {
+//     if (RTC.chipPresent()) {
+//       Serial.println("The DS1307 is stopped.  Please run the SetTime");
+//       Serial.println("example to initialize the time and begin running.");
+//       Serial.println();
+//     } else {
+//       Serial.println("DS1307 read error!  Please check the circuitry.");
+//       Serial.println();
+//     }
+//   }
 
 
     
@@ -283,6 +282,8 @@ void loop(void)
     u8g2.setCursor(105, 47); //speed
     u8g2.print(spd);
     u8g2.sendBuffer();
+
+getNewDataFromGPS();
 
 }
 
