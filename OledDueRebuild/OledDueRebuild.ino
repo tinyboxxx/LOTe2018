@@ -49,6 +49,8 @@ int BootedTime=0;
 int BootDistance=0;
 int BootedDistance=0;
 
+int tmi=0;
+
 const unsigned char UBX_HEADER[] = {0xB5, 0x62};
 
 struct NAV_PVT
@@ -137,42 +139,8 @@ void loop(void)
     // Serial.print("R");Serial.print(rpm);Serial.print("@");
 
     tmElements_t tm;
-    int tmi=0;
-    tmi++;
-    if (tmi / 30 == 1)
-    {
-        tmi=0;
-        if (RTC.read(tm))
-        {
-            Serial.print("Ok, Time = ");
-            print2digits(tm.Hour);
-            Serial.write(':');
-            print2digits(tm.Minute);
-            Serial.write(':');
-            print2digits(tm.Second);
-            Serial.print(", Date (D/M/Y) = ");
-            Serial.print(tm.Day);
-            Serial.write('/');
-            Serial.print(tm.Month);
-            Serial.write('/');
-            Serial.print(tmYearToCalendar(tm.Year));
-            Serial.println();
-        }
-        else
-        {
-            if (RTC.chipPresent())
-            {
-                Serial.println("The DS1307 is stopped.  Please run the SetTime");
-                Serial.println("example to initialize the time and begin running.");
-                Serial.println();
-            }
-            else
-            {
-                Serial.println("DS1307 read error!  Please check the circuitry.");
-                Serial.println();
-            }
-        }
-    }
+
+
 
     //data Process
     if (rpm_last == rpm) //Drop Outdate RPM
@@ -281,6 +249,42 @@ void loop(void)
     u8g2.print(":");
     u8g2.print(TimeSS); //time
     
+    tmi++;
+    if (tmi / 30 == 1)
+    {
+        tmi=0;
+        if (RTC.read(tm))
+        {
+            Serial.print("Ok, Time = ");
+            print2digits(tm.Hour);
+            Serial.write(':');
+            print2digits(tm.Minute);
+            Serial.write(':');
+            print2digits(tm.Second);
+            Serial.print(", Date (D/M/Y) = ");
+            Serial.print(tm.Day);
+            Serial.write('/');
+            Serial.print(tm.Month);
+            Serial.write('/');
+            Serial.print(tmYearToCalendar(tm.Year));
+            Serial.println();
+        }
+        else
+        {
+            if (RTC.chipPresent())
+            {
+                Serial.println("The DS1307 is stopped.  Please run the SetTime");
+                Serial.println("example to initialize the time and begin running.");
+                Serial.println();
+            }
+            else
+            {
+                Serial.println("DS1307 read error!  Please check the circuitry.");
+                Serial.println();
+            }
+        }
+    }
+
     u8g2.setCursor(157, 29);
     u8g2.print(temp);
 
@@ -357,18 +361,36 @@ int getNewDataFromRPM(void)
 void getNewDataFromGPS(void)
 {
 
-if ( processGPS() ) {
-    Serial.print("#SV: ");      Serial.print(pvt.numSV);
-    Serial.print(" fixType: "); Serial.print(pvt.fixType);
-    Serial.print(" Date:");     Serial.print(pvt.year); Serial.print("/"); Serial.print(pvt.month); Serial.print("/"); 
-                                Serial.print(pvt.day); Serial.print(" "); Serial.print(pvt.hour); Serial.print(":"); 
-                                Serial.print(pvt.minute); Serial.print(":"); Serial.print(pvt.second);
-    Serial.print(" lat/lon: "); Serial.print(pvt.lat/10000000.0f); Serial.print(","); Serial.print(pvt.lon/10000000.0f);
-    Serial.print(" gSpeed: ");  Serial.print(pvt.gSpeed/1000.0f);
-    Serial.print(" heading: "); Serial.print(pvt.headMot/100000.0f);
-    Serial.print(" hAcc: ");    Serial.print(pvt.hAcc/1000.0f);
-    Serial.println();
-  }
+    if (processGPS())
+    {
+        Serial.print("#SV: ");
+        Serial.print(pvt.numSV);
+        Serial.print(" fixType: ");
+        Serial.print(pvt.fixType);
+        Serial.print(" Date:");
+        Serial.print(pvt.year);
+        Serial.print("/");
+        Serial.print(pvt.month);
+        Serial.print("/");
+        Serial.print(pvt.day);
+        Serial.print(" ");
+        Serial.print(pvt.hour);
+        Serial.print(":");
+        Serial.print(pvt.minute);
+        Serial.print(":");
+        Serial.print(pvt.second);
+        Serial.print(" lat/lon: ");
+        Serial.print(pvt.lat / 10000000.0f);
+        Serial.print(",");
+        Serial.print(pvt.lon / 10000000.0f);
+        Serial.print(" gSpeed: ");
+        Serial.print(pvt.gSpeed / 1000.0f);
+        Serial.print(" heading: ");
+        Serial.print(pvt.headMot / 100000.0f);
+        Serial.print(" hAcc: ");
+        Serial.print(pvt.hAcc / 1000.0f);
+        Serial.println();
+    }
 }
 
 void calcChecksum(unsigned char *CK)
@@ -422,11 +444,13 @@ bool processGPS()
     return false;
 }
 
-void print2digits(int number) {
-  if (number >= 0 && number < 10) {
-    Serial.write('0');
-  }
-  Serial.print(number);
+void print2digits(int number)
+{
+    if (number >= 0 && number < 10)
+    {
+        Serial.write('0');
+    }
+    Serial.print(number);
 }
 void SyncGpsTimeToRTC(void)
 {
@@ -503,7 +527,7 @@ void bootbmp(void)
     0x00, 0x00, 0x00, 0xe0, 0x6e, 0xe7, 0xaa, 0xee, 0x8e, 0x1c, 0xdd, 0x75, 0x01, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc0, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     };
-#define boot_width 131
-#define boot_height 60
+    #define boot_width 131
+    #define boot_height 60
     u8g2.drawXBMP(65, 0, boot_width, boot_height, boot_bits); 
 };
