@@ -6,7 +6,6 @@
 #include <Wire.h>
 #include <TimeLib.h>
 #include <DS1307RTC.h>
-#include <Adafruit_MLX90614.h>
 
 // temperature Adafruit_MLX90614:
 // SCL => 21
@@ -18,8 +17,6 @@
 //Serial3.Wireless;
 
 U8G2_SSD1322_NHD_256X64_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);	// Enable U8G2_16BIT in u8g2.h
-
-Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 
 #define GCenterX 233 //211-229.5-248
 #define GCenterY 21  //0-18-37
@@ -48,8 +45,6 @@ long BoostStartTime=0;
 int BootedTime=0;
 int BootDistance=0;
 int BootedDistance=0;
-
-int tmi=0;
 
 const unsigned char UBX_HEADER[] = {0xB5, 0x62};
 
@@ -100,16 +95,13 @@ struct NAV_PVT
 NAV_PVT pvt;
 
 void setup(void)
-{
-    Timer3.attachInterrupt(tictoc); //start tictoc
-    Timer3.start(1000000);          // Calls every 1s
+{ 
     u8g2.begin();                   //from example
     u8g2.clearBuffer();
-    mlx.begin();
-    //    bootbmp();
-    //    u8g2.sendBuffer();
-    //    delay(3200);
-    //    u8g2.clearBuffer();
+        bootbmp();
+        u8g2.sendBuffer();
+        delay(3200);
+        u8g2.clearBuffer();
     Serial.begin(115200);  //debug
     Serial1.begin(115200); //rpm
     Serial2.begin(115200); //GPS
@@ -123,8 +115,7 @@ void loop(void)
     //
     //GetNewData
     spd = random(10, 50);
-    mlx.readAmbientTempC();
-    temp = mlx.readObjectTempC();
+    temp = random(45, 50);
     rpm = getNewDataFromRPM();
     GForceX = random(-900, 900);
     GForceY = random(-300, 300);
@@ -155,22 +146,56 @@ void loop(void)
         rpm=rpm_last;
     }
 
-    if (TimeSS == -1)
-    {
-        TimeSS = 59;
-        TimeMM--;
-    }
-    if (TimeMM == -1)
-    {
-        TimeMM = 59;
-        TimeH--;
-    }
-    if (TimeH == -1)
-    {
-        TimeH = 0;
-        TimeMM = 0;
-        TimeSS = 0;
-    }
+
+        if (RTC.read(tm))
+        {
+            TimeH=tm.Hour;
+            TimeMM=tm.Minute;
+            TimeSS=tm.Second;
+
+//            Serial.print(", Date (D/M/Y) = ");
+//            Serial.print(tm.Day);
+//            Serial.write('/');
+//            Serial.print(tm.Month);
+//            Serial.write('/');
+//            Serial.print(tmYearToCalendar(tm.Year));
+//            Serial.println();
+
+        }
+//        else
+//        {
+//            if (RTC.chipPresent())
+//            {
+//                Serial.println("The DS1307 is stopped.  Please run the SetTime");
+//                Serial.println("example to initialize the time and begin running.");
+//                Serial.println();
+//            }
+//            else
+//            {
+//                Serial.println("DS1307 read error!  Please check the circuitry.");
+//                Serial.println();
+//            }
+//        }
+
+
+
+
+    // if (TimeSS == -1)
+    // {
+    //     TimeSS = 59;
+    //     TimeMM--;
+    // }
+    // if (TimeMM == -1)
+    // {
+    //     TimeMM = 59;
+    //     TimeH--;
+    // }
+    // if (TimeH == -1)
+    // {
+    //     TimeH = 0;
+    //     TimeMM = 0;
+    //     TimeSS = 0;
+    // }
 
 //
 // frames
@@ -249,41 +274,8 @@ void loop(void)
     u8g2.print(":");
     u8g2.print(TimeSS); //time
     
-    tmi++;
-    if (tmi / 30 == 1)
-    {
-        tmi=0;
-        if (RTC.read(tm))
-        {
-            Serial.print("Ok, Time = ");
-            print2digits(tm.Hour);
-            Serial.write(':');
-            print2digits(tm.Minute);
-            Serial.write(':');
-            print2digits(tm.Second);
-            Serial.print(", Date (D/M/Y) = ");
-            Serial.print(tm.Day);
-            Serial.write('/');
-            Serial.print(tm.Month);
-            Serial.write('/');
-            Serial.print(tmYearToCalendar(tm.Year));
-            Serial.println();
-        }
-        else
-        {
-            if (RTC.chipPresent())
-            {
-                Serial.println("The DS1307 is stopped.  Please run the SetTime");
-                Serial.println("example to initialize the time and begin running.");
-                Serial.println();
-            }
-            else
-            {
-                Serial.println("DS1307 read error!  Please check the circuitry.");
-                Serial.println();
-            }
-        }
-    }
+   
+
 
     u8g2.setCursor(157, 29);
     u8g2.print(temp);
