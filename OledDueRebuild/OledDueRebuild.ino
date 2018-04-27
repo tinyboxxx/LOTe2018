@@ -7,10 +7,6 @@
 #include <TimeLib.h>
 #include <DS1307RTC.h>
 
-// temperature Adafruit_MLX90614:
-// SCL => 21
-// SDA => 20
-
 //Serial0.debug; 
 //Serial1.rpm;
 //Serial2.GPS;
@@ -95,18 +91,17 @@ struct NAV_PVT
 NAV_PVT pvt;
 
 void setup(void)
-{ 
-    u8g2.begin();                   //from example
+{
+    u8g2.begin(); //from example
     u8g2.clearBuffer();
-        bootbmp();
-        u8g2.sendBuffer();
-        delay(3200);
-        u8g2.clearBuffer();
+    bootbmp();
+    u8g2.sendBuffer();
+    delay(3200);
+    u8g2.clearBuffer();
     Serial.begin(115200);  //debug
     Serial1.begin(115200); //rpm
     Serial2.begin(115200); //GPS
     Serial3.begin(9600);   //Wireless
-
 }
 
 void loop(void)
@@ -152,16 +147,8 @@ void loop(void)
             TimeH=tm.Hour;
             TimeMM=tm.Minute;
             TimeSS=tm.Second;
-
-//            Serial.print(", Date (D/M/Y) = ");
-//            Serial.print(tm.Day);
-//            Serial.write('/');
-//            Serial.print(tm.Month);
-//            Serial.write('/');
-//            Serial.print(tmYearToCalendar(tm.Year));
-//            Serial.println();
-
         }
+        
 //        else
 //        {
 //            if (RTC.chipPresent())
