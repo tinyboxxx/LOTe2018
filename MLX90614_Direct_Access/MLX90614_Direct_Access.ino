@@ -73,7 +73,8 @@ void setup() {
   TWI_ConfigureMaster(pTwi, TWI_CLOCK, VARIANT_MCK);
 }
 
-void loop() {
+void loop()
+{
   uint16_t tempUK;
   float tempK;
   uint8_t hB, lB, pec;
@@ -86,33 +87,27 @@ void loop() {
 
   lB = readByte();
   hB = readByte();
-  
+
   //last read
   TWI_SendSTOPCondition(pTwi);
   pec = readByte();
-  
-  while (!TWI_TransferComplete(pTwi)) 
+
+  while (!TWI_TransferComplete(pTwi))
     ;
   //TWI_WaitTransferComplete(pTwi, RECV_TIMEOUT);
 
   tempUK = (hB << 8) | lB;
-  if(tempUK & (1 << 16)) {
+  if (tempUK & (1 << 16))
+  {
     Serial.print("Error !");
     Serial.println(tempK);
-  } 
-  else {
-    tempK = ((float)tempUK * 2) / 100 ;
-//    Serial.print("Temp UK: ");
-//    Serial.print(tempUK);
+  }
+  else
+  {
+    tempK = ((float)tempUK * 2) / 100;
     Serial.print(" C: ");
     Serial.println(tempK - 273.15);
   }
-//  Serial.print(hB, HEX);
-//  Serial.print(" : ");
-//  Serial.print(lB, HEX);
-//  Serial.print(" : ");
-//  Serial.println(pec, HEX);
-  
 }
 
 uint8_t readByte() {

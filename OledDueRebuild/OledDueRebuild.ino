@@ -6,6 +6,7 @@
 #include <Wire.h>
 #include <TimeLib.h>
 #include <DS1307RTC.h>
+#include <include/twi.h>
 
 //Serial0.debug; 
 //Serial1.rpm;
@@ -18,6 +19,77 @@ U8G2_SSD1322_NHD_256X64_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* re
 #define GCenterY 21  //0-18-37
 #define GCenter18 21 //size
 #define GCenter9 11  //half size
+
+// BMX055 Accl I2C address is 0x18(24)
+#define Addr_Accl 0x19
+// BMX055 Gyro I2C address is 0x68(104)
+#define Addr_Gyro 0x69
+// BMX055 Mag I2C address is 0x10(16)
+#define Addr_Mag 0x13
+
+//temp starts here
+
+#define ADDR      0x5A
+
+//EEPROM 32x16
+#define TO_MAX    0x00
+#define TO_MIN    0x01
+#define PWM_CTRL  0x02
+
+//RAM 32x16
+#define RAW_IR_1  0x04
+#define RAW_IR_2  0x05
+#define TA        0x06
+#define TOBJ_1    0x07
+#define TOBJ_2    0x08
+
+#define SYNC_PIN  2
+
+static const uint32_t TWI_CLOCK = 100000;
+static const uint32_t RECV_TIMEOUT = 100000;
+static const uint32_t XMIT_TIMEOUT = 100000;
+
+Twi *pTwi = WIRE_INTERFACE;
+
+static void Wire_Init(void) {
+  pmc_enable_periph_clk(WIRE_INTERFACE_ID);
+  PIO_Configure(
+  g_APinDescription[PIN_WIRE_SDA].pPort,
+  g_APinDescription[PIN_WIRE_SDA].ulPinType,
+  g_APinDescription[PIN_WIRE_SDA].ulPin,
+  g_APinDescription[PIN_WIRE_SDA].ulPinConfiguration);
+  PIO_Configure(
+  g_APinDescription[PIN_WIRE_SCL].pPort,
+  g_APinDescription[PIN_WIRE_SCL].ulPinType,
+  g_APinDescription[PIN_WIRE_SCL].ulPin,
+  g_APinDescription[PIN_WIRE_SCL].ulPinConfiguration);
+
+  NVIC_DisableIRQ(TWI1_IRQn);
+  NVIC_ClearPendingIRQ(TWI1_IRQn);
+  NVIC_SetPriority(TWI1_IRQn, 0);
+  NVIC_EnableIRQ(TWI1_IRQn);
+}
+
+static void Wire1_Init(void) {
+  	pmc_enable_periph_clk(WIRE1_INTERFACE_ID);
+	PIO_Configure(
+			g_APinDescription[PIN_WIRE1_SDA].pPort,
+			g_APinDescription[PIN_WIRE1_SDA].ulPinType,
+			g_APinDescription[PIN_WIRE1_SDA].ulPin,
+			g_APinDescription[PIN_WIRE1_SDA].ulPinConfiguration);
+	PIO_Configure(
+			g_APinDescription[PIN_WIRE1_SCL].pPort,
+			g_APinDescription[PIN_WIRE1_SCL].ulPinType,
+			g_APinDescription[PIN_WIRE1_SCL].ulPin,
+			g_APinDescription[PIN_WIRE1_SCL].ulPinConfiguration);
+
+	NVIC_DisableIRQ(TWI0_IRQn);
+	NVIC_ClearPendingIRQ(TWI0_IRQn);
+	NVIC_SetPriority(TWI0_IRQn, 0);
+	NVIC_EnableIRQ(TWI0_IRQn);
+}
+//temp ends here
+
 
 bool fastboot=0;
 int rpm = 0;
@@ -92,16 +164,16 @@ NAV_PVT pvt;
 
 void setup(void)
 {
-    u8g2.begin(); //from example
-    u8g2.clearBuffer();
+    u8g2.begin(); 
     bootbmp();
     u8g2.sendBuffer();
-    delay(3200);
-    u8g2.clearBuffer();
+    bmx055Setup();
+    tempsetup();
     Serial.begin(115200);  //debug
     Serial1.begin(115200); //rpm
     Serial2.begin(115200); //GPS
     Serial3.begin(9600);   //Wireless
+    u8g2.clearBuffer();
 }
 
 void loop(void)
@@ -110,15 +182,15 @@ void loop(void)
     //
     //GetNewData
     spd = random(10, 50);
-    temp = random(45, 50);
+    temp = getNewDataFromTemp();
     rpm = getNewDataFromRPM();
-    GForceX = random(-900, 900);
-    GForceY = random(-300, 300);
+    getNewDataFromBMX();
     GForceXScreen = GForceX / 60 + GCenterX - 1;
     GForceYScreen = GForceY / 60 + GCenterY - 1;
     GearRatio = random(0, 9);//#define GearRatioConstant = 0.17522;
     Volt -= 0.01;
     getNewDataFromGPS();
+
 
 
     // Serial3.print("R");Serial3.print(rpm);Serial3.print("@");
@@ -140,8 +212,6 @@ void loop(void)
     {
         rpm=rpm_last;
     }
-
-
         if (RTC.read(tm))
         {
             TimeH=tm.Hour;
@@ -149,40 +219,6 @@ void loop(void)
             TimeSS=tm.Second;
         }
         
-//        else
-//        {
-//            if (RTC.chipPresent())
-//            {
-//                Serial.println("The DS1307 is stopped.  Please run the SetTime");
-//                Serial.println("example to initialize the time and begin running.");
-//                Serial.println();
-//            }
-//            else
-//            {
-//                Serial.println("DS1307 read error!  Please check the circuitry.");
-//                Serial.println();
-//            }
-//        }
-
-
-
-
-    // if (TimeSS == -1)
-    // {
-    //     TimeSS = 59;
-    //     TimeMM--;
-    // }
-    // if (TimeMM == -1)
-    // {
-    //     TimeMM = 59;
-    //     TimeH--;
-    // }
-    // if (TimeH == -1)
-    // {
-    //     TimeH = 0;
-    //     TimeMM = 0;
-    //     TimeSS = 0;
-    // }
 
 //
 // frames
@@ -244,7 +280,7 @@ void loop(void)
     u8g2.print(GForceY); //gforcey
 
     u8g2.setCursor(25, 64);
-    if (rpm > 999 && rpm <= 4000)
+    if (rpm <= 5000)
     {
         u8g2.print(rpm); //rpm
     }
@@ -288,15 +324,6 @@ void loop(void)
 
 
 
-}
-
-
-/*************************************************************************
-//Function to run every seconds
- *************************************************************************/
-void tictoc() //倒计时读秒
-{
-  TimeSS--;
 }
 
 /*************************************************************************
@@ -427,19 +454,19 @@ void print2digits(int number)
 {
     if (number >= 0 && number < 10)
     {
-        Serial.write('0');
+        u8g2.print(0);
     }
-    Serial.print(number);
+    u8g2.print(number);
 }
-void SyncGpsTimeToRTC(void)
-{
-    Serial.print(pvt.year);
-    Serial.print(pvt.month);
-    Serial.print(pvt.day);
-    Serial.print(pvt.hour);
-    Serial.print(pvt.minute);
-    Serial.print(pvt.second);
-}
+// void SyncGpsTimeToRTC(void)
+// {
+//     Serial.print(pvt.year);
+//     Serial.print(pvt.month);
+//     Serial.print(pvt.day);
+//     Serial.print(pvt.hour);
+//     Serial.print(pvt.minute);
+//     Serial.print(pvt.second);
+// }
 
 void bootbmp(void)
 {
@@ -510,3 +537,318 @@ void bootbmp(void)
     #define boot_height 60
     u8g2.drawXBMP(65, 0, boot_width, boot_height, boot_bits); 
 };
+
+void bmx055Setup()
+{
+  // Initialise I2C communication as MASTER
+  Wire.begin();
+
+  // Start I2C Transmission
+  Wire.beginTransmission(Addr_Accl);
+  // Select PMU_Range register
+  Wire.write(0x0F);
+  // Range = +/- 2g
+  Wire.write(0x03);
+  // Stop I2C Transmission
+  Wire.endTransmission();
+
+  // Start I2C Transmission
+  Wire.beginTransmission(Addr_Accl);
+  // Select PMU_BW register
+  Wire.write(0x10);
+  // Bandwidth = 7.81 Hz
+  Wire.write(0x08);
+  // Stop I2C Transmission
+  Wire.endTransmission();
+
+  // Start I2C Transmission
+  Wire.beginTransmission(Addr_Accl);
+  // Select PMU_LPW register
+  Wire.write(0x11);
+  // Normal mode, Sleep duration = 0.5ms
+  Wire.write(0x00);
+  // Stop I2C Transmission on the device
+  Wire.endTransmission();
+
+  // Start I2C Transmission
+  Wire.beginTransmission(Addr_Gyro);
+  // Select Range register
+  Wire.write(0x0F);
+  // Full scale = +/- 125 degree/s
+  Wire.write(0x04);
+  // Stop I2C Transmission
+  Wire.endTransmission();
+
+  // Start I2C Transmission
+  Wire.beginTransmission(Addr_Gyro);
+  // Select Bandwidth register
+  Wire.write(0x10);
+  // ODR = 100 Hz
+  Wire.write(0x07);
+  // Stop I2C Transmission
+  Wire.endTransmission();
+
+  // Start I2C Transmission
+  Wire.beginTransmission(Addr_Gyro);
+  // Select LPM1 register
+  Wire.write(0x11);
+  // Normal mode, Sleep duration = 2ms
+  Wire.write(0x00);
+  // Stop I2C Transmission
+  Wire.endTransmission();
+
+  // Start I2C Transmission
+  Wire.beginTransmission(Addr_Mag);
+  // Select Mag register
+  Wire.write(0x4B);
+  // Soft reset
+  Wire.write(0x83);
+  // Stop I2C Transmission
+  Wire.endTransmission();
+
+  // Start I2C Transmission
+  Wire.beginTransmission(Addr_Mag);
+  // Select Mag register
+  Wire.write(0x4C);
+  // Normal Mode, ODR = 10 Hz
+  Wire.write(0x00);
+  // Stop I2C Transmission
+  Wire.endTransmission();
+
+  // Start I2C Transmission
+  Wire.beginTransmission(Addr_Mag);
+  // Select Mag register
+  Wire.write(0x4E);
+  // X, Y, Z-Axis enabled
+  Wire.write(0x84);
+  // Stop I2C Transmission
+  Wire.endTransmission();
+
+  // Start I2C Transmission
+  Wire.beginTransmission(Addr_Mag);
+  // Select Mag register
+  Wire.write(0x51);
+  // No. of Repetitions for X-Y Axis = 9
+  Wire.write(0x04);
+  // Stop I2C Transmission
+  Wire.endTransmission();
+
+  // Start I2C Transmission
+  Wire.beginTransmission(Addr_Mag);
+  // Select Mag register
+  Wire.write(0x52);
+  // No. of Repetitions for Z-Axis = 15
+  Wire.write(0x0F);
+  // Stop I2C Transmission
+  Wire.endTransmission();
+  delay(300);
+}
+
+void getNewDataFromBMX()
+{
+  unsigned int data[6];
+
+  for (int i = 0; i < 6; i++)
+  {
+    // Start I2C Transmission
+    Wire.beginTransmission(Addr_Accl);
+    // Select data register
+    Wire.write((2 + i));
+    // Stop I2C Transmission
+    Wire.endTransmission();
+
+    // Request 1 byte of data
+    Wire.requestFrom(Addr_Accl, 1);
+
+    // Read 6 bytes of data
+    // xAccl lsb, xAccl msb, yAccl lsb, yAccl msb, zAccl lsb, zAccl msb
+    if (Wire.available() == 1)
+    {
+      data[i] = Wire.read();
+    }
+  }
+
+  // Convert the data to 12-bits
+  int xAccl = ((data[1] * 256) + (data[0] & 0xF0)) / 16;
+  if (xAccl > 2047)
+  {
+    xAccl -= 4096;
+  }
+  int yAccl = ((data[3] * 256) + (data[2] & 0xF0)) / 16;
+  if (yAccl > 2047)
+  {
+    yAccl -= 4096;
+  }
+  int zAccl = ((data[5] * 256) + (data[4] & 0xF0)) / 16;
+  if (zAccl > 2047)
+  {
+    zAccl -= 4096;
+  }
+
+  for (int i = 0; i < 6; i++)
+  {
+    // Start I2C Transmission
+    Wire.beginTransmission(Addr_Gyro);
+    // Select data register
+    Wire.write((2 + i));
+    // Stop I2C Transmission
+    Wire.endTransmission();
+
+    // Request 1 byte of data
+    Wire.requestFrom(Addr_Gyro, 1);
+
+    // Read 6 bytes of data
+    // xGyro lsb, xGyro msb, yGyro lsb, yGyro msb, zGyro lsb, zGyro msb
+    if (Wire.available() == 1)
+    {
+      data[i] = Wire.read();
+    }
+  }
+
+  // Convert the data
+  int xGyro = (data[1] * 256) + data[0];
+  if (xGyro > 32767)
+  {
+    xGyro -= 65536;
+  }
+  int yGyro = (data[3] * 256) + data[2];
+  if (yGyro > 32767)
+  {
+    yGyro -= 65536;
+  }
+  int zGyro = (data[5] * 256) + data[4];
+  if (zGyro > 32767)
+  {
+    zGyro -= 65536;
+  }
+
+  for (int i = 0; i < 6; i++)
+  {
+    // Start I2C Transmission
+    Wire.beginTransmission(Addr_Mag);
+    // Select data register
+    Wire.write((66 + i));
+    // Stop I2C Transmission
+    Wire.endTransmission();
+
+    // Request 1 byte of data
+    Wire.requestFrom(Addr_Mag, 1);
+
+    // Read 6 bytes of data
+    // xMag lsb, xMag msb, yMag lsb, yMag msb, zMag lsb, zMag msb
+    if (Wire.available() == 1)
+    {
+      data[i] = Wire.read();
+    }
+  }
+
+  // Convert the data
+  int xMag = ((data[1] * 256) + (data[0] & 0xF8)) / 8;
+  if (xMag > 4095)
+  {
+    xMag -= 8192;
+  }
+  int yMag = ((data[3] * 256) + (data[2] & 0xF8)) / 8;
+  if (yMag > 4095)
+  {
+    yMag -= 8192;
+  }
+  int zMag = ((data[5] * 256) + (data[4] & 0xFE)) / 2;
+  if (zMag > 16383)
+  {
+    zMag -= 32768;
+  }
+
+  // Output data to serial monitor
+  //  Serial.print("Acceleration in X/Y/Z-Axis : ");
+//   Serial.print(xAccl);  Serial.print("\t");  Serial.print(yAccl);  Serial.print("\t");  Serial.println(zAccl); 
+  //  Serial.print("X-Axis of rotation : ");
+//   Serial.print(xGyro);  Serial.print("\t");  Serial.print(yGyro);  Serial.print("\t");  Serial.print(zGyro);  Serial.print("\t");
+  //  Serial.print("Magnetic field in XYZ-Axis : ");
+//   Serial.print(xMag);  Serial.print("\t");  Serial.print(yMag);  Serial.print("\t");  Serial.println(zMag);
+GForceX=xAccl;
+GForceY=yAccl;
+}
+
+
+void tempsetup() {
+  pinMode(SYNC_PIN, OUTPUT);
+  digitalWrite(SYNC_PIN, LOW);
+
+  Wire_Init();
+  // Disable PDC channel
+  pTwi->TWI_PTCR = UART_PTCR_RXTDIS | UART_PTCR_TXTDIS;
+  TWI_ConfigureMaster(pTwi, TWI_CLOCK, VARIANT_MCK);
+}
+
+float getNewDataFromTemp()
+{
+  uint16_t tempUK;
+  float tempK;
+  uint8_t hB, lB, pec;
+
+  digitalWrite(SYNC_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(SYNC_PIN, LOW);
+
+  TWI_StartRead(pTwi, ADDR, TOBJ_1, 1);
+
+  lB = readByte();
+  hB = readByte();
+
+  //last read
+  TWI_SendSTOPCondition(pTwi);
+  pec = readByte();
+
+  while (!TWI_TransferComplete(pTwi))
+    ;
+  //TWI_WaitTransferComplete(pTwi, RECV_TIMEOUT);
+
+  tempUK = (hB << 8) | lB;
+  if (tempUK & (1 << 16))
+  {
+    Serial.print("Error !");
+    Serial.println(tempK);
+  }
+  else
+  {
+    tempK = ((float)tempUK * 2) / 100;
+    Serial.print("gettempinC: ");
+    Serial.println(tempK - 273.15);
+    return(tempK - 273.15);
+  }
+}
+
+
+//temp function starts here
+uint8_t readByte() {
+  //TWI_WaitByteReceived(pTwi, RECV_TIMEOUT);
+  while (!TWI_ByteReceived(pTwi))
+    ;
+  return TWI_ReadByte(pTwi);
+}
+
+static inline bool TWI_WaitTransferComplete(Twi *_twi, uint32_t _timeout) {
+  while (!TWI_TransferComplete(_twi)) {
+    if (TWI_FailedAcknowledge(_twi))
+      return false;
+    if (--_timeout == 0)
+      return false;
+  }
+  return true;
+}
+
+static inline bool TWI_WaitByteReceived(Twi *_twi, uint32_t _timeout) {
+  while (!TWI_ByteReceived(_twi)) {
+    if (TWI_FailedAcknowledge(_twi))
+      return false;
+    if (--_timeout == 0)
+      return false;
+  }
+  return true;
+}
+
+static inline bool TWI_FailedAcknowledge(Twi *pTwi) {
+  return pTwi->TWI_SR & TWI_SR_NACK;
+}
+//temp function ends here
