@@ -168,7 +168,16 @@ void setup(void)
     bootbmp();
     u8g2.sendBuffer();
     bmx055Setup();
-    tempsetup();
+
+    //time setup start here
+    pinMode(SYNC_PIN, OUTPUT);
+    digitalWrite(SYNC_PIN, LOW);
+    Wire_Init();
+    // Disable PDC channel
+    pTwi->TWI_PTCR = UART_PTCR_RXTDIS | UART_PTCR_TXTDIS;
+    TWI_ConfigureMaster(pTwi, TWI_CLOCK, VARIANT_MCK);
+    //time setup ends here
+
     Serial.begin(115200);  //debug
     Serial1.begin(115200); //rpm
     Serial2.begin(115200); //GPS
@@ -771,16 +780,6 @@ GForceY=yAccl;
 }
 
 
-void tempsetup() {
-  pinMode(SYNC_PIN, OUTPUT);
-  digitalWrite(SYNC_PIN, LOW);
-
-  Wire_Init();
-  // Disable PDC channel
-  pTwi->TWI_PTCR = UART_PTCR_RXTDIS | UART_PTCR_TXTDIS;
-  TWI_ConfigureMaster(pTwi, TWI_CLOCK, VARIANT_MCK);
-}
-
 float getNewDataFromTemp()
 {
   uint16_t tempUK;
@@ -820,7 +819,7 @@ float getNewDataFromTemp()
 }
 
 
-//temp function starts here
+//👇temp function starts here
 uint8_t readByte() {
   //TWI_WaitByteReceived(pTwi, RECV_TIMEOUT);
   while (!TWI_ByteReceived(pTwi))
@@ -851,4 +850,4 @@ static inline bool TWI_WaitByteReceived(Twi *_twi, uint32_t _timeout) {
 static inline bool TWI_FailedAcknowledge(Twi *pTwi) {
   return pTwi->TWI_SR & TWI_SR_NACK;
 }
-//temp function ends here
+//👆temp function ends here

@@ -1,86 +1,16 @@
 {
     "configurations": [
         {
-            "name": "Mac",
-            "includePath": [
-                "/usr/include",
-                "/usr/local/include",
-                "${workspaceFolder}"
-            ],
-            "defines": [],
-            "intelliSenseMode": "clang-x64",
-            "browse": {
-                "path": [
-                    "/usr/include",
-                    "/usr/local/include",
-                    "${workspaceFolder}"
-                ],
-                "limitSymbolsToIncludedHeaders": true,
-                "databaseFilename": ""
-            },
-            "macFrameworkPath": [
-                "/System/Library/Frameworks",
-                "/Library/Frameworks"
-            ],
-            "compilerPath": "/usr/bin/clang",
-            "cStandard": "c11",
-            "cppStandard": "c++17"
-        },
-        {
-            "name": "Linux",
-            "includePath": [
-                "/usr/include",
-                "/usr/local/include",
-                "${workspaceFolder}"
-            ],
-            "defines": [],
-            "intelliSenseMode": "clang-x64",
-            "browse": {
-                "path": [
-                    "/usr/include",
-                    "/usr/local/include",
-                    "${workspaceFolder}"
-                ],
-                "limitSymbolsToIncludedHeaders": true,
-                "databaseFilename": ""
-            }
-        },
-        {
             "name": "Win32",
             "includePath": [
-                "${workspaceFolder}",
                 "C:\\Users\\hcxtx\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\sam\\1.6.11\\cores\\arduino"
-            ],
-            "defines": [
-                "_DEBUG",
-                "UNICODE",
-                "_UNICODE"
             ],
             "intelliSenseMode": "msvc-x64",
             "browse": {
                 "path": [
-                    "${workspaceFolder}",
-                    "C:\\Users\\hcxtx\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\sam\\1.6.11\\cores\\arduino",
-                    "C:/Program Files (x86)/Arduino/hardware",
-                    "C:/Program Files (x86)/Arduino/libraries",
-                    "C:\\Users\\hcxtx\\Documents\\Arduino\\libraries\\",
-                    "C:/Users/hcxtx/Documents/Arduino/hardware/"
-                ],
-                "limitSymbolsToIncludedHeaders": false,
-                "databaseFilename": ""
-            },
-            "cStandard": "c11",
-            "cppStandard": "c++17"
-        },
-        {
-            "name": "Arduino",
-            "includePath": [
-                "${workspaceRoot}"
-            ],
-            "browse": {
-                "path": [
-                    "C:/Program Files (x86)/Arduino/hardware",
-                    "C:/Program Files (x86)/Arduino/libraries",
+                    "C:\\Program Files (x86)\\Arduino\\hardware",
+                    "C:\\Program Files (x86)\\Arduino\\libraries",
+                    "C:\\Program Files (x86)\\Arduino\\hardware\\tools\\avr\\avr\\include",
                     "C:\\Users\\hcxtx\\Documents\\Arduino\\libraries\\",
                     "C:/Users/hcxtx/Documents/Arduino/libraries/DueTimer/",
                     "C:/Users/hcxtx/Documents/Arduino/libraries/SPI/",
@@ -88,10 +18,10 @@
                     "C:/Users/hcxtx/Documents/Arduino/hardware/",
                     "${workspaceRoot}"
                 ],
-                "limitSymbolsToIncludedHeaders": true,
-                "databaseFilename": ""
+                "limitSymbolsToIncludedHeaders": false
             },
-            "intelliSenseMode": "msvc-x64"
+            "cStandard": "c11",
+            "cppStandard": "c++17"
         }
     ],
     "version": 3
