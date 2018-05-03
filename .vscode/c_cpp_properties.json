@@ -16,7 +16,8 @@
                     "C:/Users/hcxtx/Documents/Arduino/libraries/SPI/",
                     "C:/Users/hcxtx/Documents/Arduino/libraries/U8g2/src/",
                     "C:/Users/hcxtx/Documents/Arduino/hardware/",
-                    "${workspaceRoot}"
+                    "${workspaceRoot}",
+                    "C:\\Users\\hcxtx\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\sam\\1.6.11\\cores\\arduino"
                 ],
                 "limitSymbolsToIncludedHeaders": false
             },
