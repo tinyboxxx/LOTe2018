@@ -167,40 +167,57 @@ void setup(void)
     u8g2.begin(); 
     bootbmp();
     u8g2.sendBuffer();
-    bmx055Setup();
-
-    //time setup start here
-    pinMode(SYNC_PIN, OUTPUT);
-    digitalWrite(SYNC_PIN, LOW);
-    Wire_Init();
-    // Disable PDC channel
-    pTwi->TWI_PTCR = UART_PTCR_RXTDIS | UART_PTCR_TXTDIS;
-    TWI_ConfigureMaster(pTwi, TWI_CLOCK, VARIANT_MCK);
-    //time setup ends here
-
     Serial.begin(115200);  //debug
     Serial1.begin(115200); //rpm
     Serial2.begin(115200); //GPS
     Serial3.begin(9600);   //Wireless
+
+Serial.print("01");
+    
+    bmx055Setup();
+
+Serial.print("02");
+    //time setup start here
+    pinMode(SYNC_PIN, OUTPUT);
+Serial.print("03");
+    digitalWrite(SYNC_PIN, LOW);
+
+Serial.print("04");
+    Wire_Init();
+Serial.print("05");
+    // Disable PDC channel
+    pTwi->TWI_PTCR = UART_PTCR_RXTDIS | UART_PTCR_TXTDIS;
+Serial.print("06");
+    TWI_ConfigureMaster(pTwi, TWI_CLOCK, VARIANT_MCK);
+    //time setup ends here
+
+Serial.print("07");
+
     u8g2.clearBuffer();
 }
 
 void loop(void)
 {
-
+Serial.print("07");
     //
     //GetNewData
     spd = random(10, 50);
-    temp = getNewDataFromTemp();
+    Serial.print("07");
+
     rpm = getNewDataFromRPM();
+    Serial.print("07");
     getNewDataFromBMX();
-    GForceXScreen = GForceX / 60 + GCenterX - 1;
-    GForceYScreen = GForceY / 60 + GCenterY - 1;
+    Serial.print("07");
+    GForceXScreen = GForceX / 60000 + GCenterX - 1;
+    GForceYScreen = GForceY / 60000 + GCenterY - 1;
+    Serial.print("07");
+        temp = getNewDataFromTemp();
+    Serial.print("07");
     GearRatio = random(0, 9);//#define GearRatioConstant = 0.17522;
     Volt -= 0.01;
     getNewDataFromGPS();
 
-
+Serial.print("07");
 
     // Serial3.print("R");Serial3.print(rpm);Serial3.print("@");
     // Serial.print("R");Serial.print(rpm);Serial.print("@");
@@ -232,7 +249,7 @@ void loop(void)
 //
 // frames
 //
-
+Serial.print("07");
     u8g2.clearBuffer();
     u8g2.setFont(u8g2_font_6x10_tf);
     u8g2.drawStr(109, 7, "Speed");
@@ -263,7 +280,7 @@ void loop(void)
     //Speed Cube:
     u8g2.drawFrame(100, 0, 5, 47);  //211-229.5-248
     u8g2.drawBox(GForceXScreen, GForceYScreen, 3, 3); //GForceBox
-
+Serial.print("07");
     //-----
     //DATAS:
     //----
@@ -306,7 +323,7 @@ void loop(void)
     u8g2.print(":");
     u8g2.print(TimeSS); //time
     
-   
+   Serial.print("07");
 
 
     u8g2.setCursor(157, 29);
@@ -330,7 +347,7 @@ void loop(void)
     u8g2.setCursor(105, 47); //speed
     u8g2.print(spd);
     u8g2.sendBuffer();
-
+Serial.print("Freshed!");
 
 
 }

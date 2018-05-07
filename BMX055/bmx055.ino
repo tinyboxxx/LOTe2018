@@ -7,11 +7,11 @@
 #include<Wire.h>
 
 // BMX055 Accl I2C address is 0x18(24)
-#define Addr_Accl 0x19
+#define Addr_Accl 0x18
 // BMX055 Gyro I2C address is 0x68(104)
-#define Addr_Gyro 0x69
+#define Addr_Gyro 0x68
 // BMX055 Mag I2C address is 0x10(16)
-#define Addr_Mag 0x13
+#define Addr_Mag 0x10
 
 void setup()
 {
