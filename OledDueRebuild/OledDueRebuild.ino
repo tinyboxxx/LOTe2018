@@ -21,11 +21,11 @@ U8G2_SSD1322_NHD_256X64_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* re
 #define GCenter9 11  //half size
 
 // BMX055 Accl I2C address is 0x18(24)
-#define Addr_Accl 0x19
+#define Addr_Accl 0x18
 // BMX055 Gyro I2C address is 0x68(104)
-#define Addr_Gyro 0x69
+#define Addr_Gyro 0x68
 // BMX055 Mag I2C address is 0x10(16)
-#define Addr_Mag 0x13
+#define Addr_Mag 0x10
 
 //temp starts here
 
@@ -208,8 +208,8 @@ Serial.print("07");
     Serial.print("07");
     getNewDataFromBMX();
     Serial.print("07");
-    GForceXScreen = GForceX / 60000 + GCenterX - 1;
-    GForceYScreen = GForceY / 60000 + GCenterY - 1;
+    GForceXScreen = GForceX / 100 + GCenterX - 1;
+    GForceYScreen = GForceY / 100 + GCenterY - 1;
     Serial.print("07");
         temp = getNewDataFromTemp();
     Serial.print("07");
@@ -484,15 +484,6 @@ void print2digits(int number)
     }
     u8g2.print(number);
 }
-// void SyncGpsTimeToRTC(void)
-// {
-//     Serial.print(pvt.year);
-//     Serial.print(pvt.month);
-//     Serial.print(pvt.day);
-//     Serial.print(pvt.hour);
-//     Serial.print(pvt.minute);
-//     Serial.print(pvt.second);
-// }
 
 void bootbmp(void)
 {
