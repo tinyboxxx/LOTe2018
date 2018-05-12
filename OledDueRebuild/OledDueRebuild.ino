@@ -202,29 +202,26 @@ Serial.print("07");
     //
     //GetNewData
     spd = random(10, 50);
-    Serial.print("07");
 
-    rpm = getNewDataFromRPM();
-    Serial.print("07");
+
+    getNewDataFromRPM();
+
     getNewDataFromBMX();
-    Serial.print("07");
+
     GForceXScreen = GForceX / 100 + GCenterX - 1;
     GForceYScreen = GForceY / 100 + GCenterY - 1;
-    Serial.print("07");
+
         temp = getNewDataFromTemp();
-    Serial.print("07");
+
     GearRatio = random(0, 9);//#define GearRatioConstant = 0.17522;
     Volt -= 0.01;
     getNewDataFromGPS();
 
-Serial.print("07");
-
     // Serial3.print("R");Serial3.print(rpm);Serial3.print("@");
-    // Serial.print("R");Serial.print(rpm);Serial.print("@");
+     Serial.print("R");Serial.print(rpm);Serial.print("@");
+     Serial.print(" Rsame");Serial.print(rpm_same);Serial.print(" Rlast");Serial.print(rpm_last);
 
     tmElements_t tm;
-
-
 
     //data Process
     if (rpm_last == rpm) //Drop Outdate RPM
@@ -236,20 +233,24 @@ Serial.print("07");
     }
     else
     {
-        rpm=rpm_last;
-    }
-        if (RTC.read(tm))
-        {
-            TimeH=tm.Hour;
-            TimeMM=tm.Minute;
-            TimeSS=tm.Second;
-        }
         
+        rpm_same = 0;
+    }
+rpm_last=rpm;
+     Serial.print("Ra");Serial.print(rpm);Serial.print("@");
+     Serial.print(" Rsamea");Serial.print(rpm_same);Serial.print(" Rlasta");Serial.print(rpm_last);
 
-//
-// frames
-//
-Serial.print("07");
+    if (RTC.read(tm))
+    {
+        TimeH = tm.Hour;
+        TimeMM = tm.Minute;
+        TimeSS = tm.Second;
+    }
+
+    //
+    // frames
+    //
+    Serial.print("07");
     u8g2.clearBuffer();
     u8g2.setFont(u8g2_font_6x10_tf);
     u8g2.drawStr(109, 7, "Speed");
