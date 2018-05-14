@@ -1,4 +1,4 @@
-
+//2018.5.13.2
 #include <Arduino.h>
 #include <U8g2lib.h>
 #include <SPI.h>
@@ -198,23 +198,25 @@ Serial.print("07");
 
 void loop(void)
 {
-Serial.print("07");
     //
     //GetNewData
     spd = random(10, 50);
-
 
     getNewDataFromRPM();
 
     getNewDataFromBMX();
 
-    GForceXScreen = GForceX / 100 + GCenterX - 1;
-    GForceYScreen = GForceY / 100 + GCenterY - 1;
+    GForceXScreen = GForceX / 90 + GCenterX - 1;
+    GForceYScreen = GForceY / 90 + GCenterY - 1;
 
-        temp = getNewDataFromTemp();
+    temp = getNewDataFromTemp();
 
-    GearRatio = random(0, 9);//#define GearRatioConstant = 0.17522;
-    Volt -= 0.01;
+    GearRatio = spd * 0.17522; //#define GearRatioConstant = 0.17522;
+    GearRatio = GearRatio / rpm;
+    Volt = analogRead(A0);
+    Volt = Volt / 1024;
+    Volt = Volt * 6.6;
+
     getNewDataFromGPS();
 
     // Serial3.print("R");Serial3.print(rpm);Serial3.print("@");
@@ -318,15 +320,12 @@ Serial.print("07");
 
     u8g2.setFont(u8g2_font_logisoso18_tr);
     u8g2.setCursor(0, 52);
-    u8g2.print(TimeH); //time
+    display2digits(TimeH); //time
     u8g2.print(":");
-    u8g2.print(TimeMM); //time
+    display2digits(TimeMM); //time
     u8g2.print(":");
-    u8g2.print(TimeSS); //time
+    display2digits(TimeSS); //time
     
-   Serial.print("07");
-
-
     u8g2.setCursor(157, 29);
     u8g2.print(temp);
 
@@ -343,6 +342,7 @@ Serial.print("07");
 
     u8g2.setCursor(0, 29);
     u8g2.print(Volt); //battery
+    u8g2.print("V"); //battery
 
     u8g2.setFont(u8g2_font_logisoso34_tn);
     u8g2.setCursor(105, 47); //speed
@@ -477,7 +477,7 @@ bool processGPS()
     return false;
 }
 
-void print2digits(int number)
+void display2digits(int number)
 {
     if (number >= 0 && number < 10)
     {
