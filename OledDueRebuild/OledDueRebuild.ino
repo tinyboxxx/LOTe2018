@@ -7,13 +7,18 @@
 #include <TimeLib.h>
 #include <DS1307RTC.h>
 #include <include/twi.h>
+#include <InterruptFreqMeasure.h>
 
 //Serial0.debug; 
 //Serial1.rpm;
 //Serial2.GPS;
 //Serial3.Wireless;
 
-U8G2_SSD1322_NHD_256X64_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);	// Enable U8G2_16BIT in u8g2.h
+//Pin2 rear  speed sonsor
+//Pin3 Front speed sonsor
+
+U8G2_SSD1322_NHD_256X64_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);	
+//!!!IMPORTANT!!! GO Enable U8G2_16BIT in u8g2.h
 
 #define GCenterX 233 //211-229.5-248
 #define GCenterY 21  //0-18-37
@@ -114,6 +119,14 @@ int BootedTime=0;
 int BootDistance=0;
 int BootedDistance=0;
 
+unsigned long timebetweenRear = 0;
+unsigned long timelastRear = 0;
+unsigned long timenowRear = 0;
+
+unsigned long timebetweenFront = 0;
+unsigned long timelastFront = 0;
+unsigned long timenowFront = 0;
+
 const unsigned char UBX_HEADER[] = {0xB5, 0x62};
 
 struct NAV_PVT
@@ -193,14 +206,23 @@ Serial.print("06");
 
 Serial.print("07");
 
+    pinMode(2, INPUT); //Pin2 rear  speed sonsor
+    pinMode(3, INPUT); //Pin3 Front speed sonsor
+    Serial.begin(115200);
+    attachInterrupt(2, countnowRear, RISING);
+    attachInterrupt(3, countnowFront, RISING);
+
     u8g2.clearBuffer();
+    u8g2.sendBuffer();
 }
 
 void loop(void)
 {
+    u8g2.clearBuffer();
     //
     //GetNewData
-    spd = random(10, 50);
+    spdRear = 6319879.2 / (timebetweenRear * NumPerCircleRear);
+    spdFront = 6319879.2 / (timebetweenFront * NumPerCircleFront);
 
     getNewDataFromRPM();
 
@@ -225,7 +247,7 @@ void loop(void)
 
     tmElements_t tm;
 
-    //data Process
+    //data postProcess
     if (rpm_last == rpm) //Drop Outdate RPM
     {
         if (rpm_same >= 5)
@@ -253,7 +275,7 @@ rpm_last=rpm;
     // frames
     //
     Serial.print("07");
-    u8g2.clearBuffer();
+
     u8g2.setFont(u8g2_font_6x10_tf);
     u8g2.drawStr(109, 7, "Speed");
     u8g2.drawStr(151, 7, " Temp");
@@ -285,7 +307,7 @@ rpm_last=rpm;
     u8g2.drawBox(GForceXScreen, GForceYScreen, 3, 3); //GForceBox
 Serial.print("07");
     //-----
-    //DATAS:
+    //DRAW DATAS:
     //----
 
     //temp
@@ -352,6 +374,29 @@ Serial.print("Freshed!");
 
 
 }
+
+
+void countnowRear()
+{
+    timenowRear = micros();
+    if (timenowRear - timelastRear > 40000)
+    {
+        timebetweenRear = timenowRear - timelastRear;
+        timelastRear = timenowRear;
+    }
+}
+
+void countnowFront()
+{
+    timenowFront = micros();
+    if (timenowFront - timelastFront > 40000)
+    {
+        timebetweenFront = timenowFront - timelastFront;
+        timelastFront = timenowFront;
+    }
+}
+
+
 
 /*************************************************************************
 //Function to calculate the distance between two waypoints
