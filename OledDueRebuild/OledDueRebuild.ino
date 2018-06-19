@@ -1,4 +1,4 @@
-//2018.5.13.2
+//2018.6.12.1
 #include <Arduino.h>
 #include <U8g2lib.h>
 #include <SPI.h>
@@ -7,6 +7,7 @@
 #include <TimeLib.h>
 #include <DS1307RTC.h>
 #include <include/twi.h>
+#include <ResponsiveAnalogRead.h>
 
 //Serial0.debug; 
 //Serial1.rpm;
@@ -114,6 +115,8 @@ int BootedTime=0;
 int BootDistance=0;
 int BootedDistance=0;
 
+ResponsiveAnalogRead analog(A0, true);
+
 const unsigned char UBX_HEADER[] = {0xB5, 0x62};
 
 struct NAV_PVT
@@ -203,7 +206,7 @@ void loop(void)
     spd = random(10, 50);
 
     getNewDataFromRPM();
-
+    getNewDataFromWifi();
     getNewDataFromBMX();
 
     GForceXScreen = GForceX / 90 + GCenterX - 1;
@@ -213,7 +216,9 @@ void loop(void)
 
     GearRatio = spd * 0.17522; //#define GearRatioConstant = 0.17522;
     GearRatio = GearRatio / rpm;
-    Volt = analogRead(A0);
+
+    analog.update();
+    Volt = analog.getValue();
     Volt = Volt / 1024;
     Volt = Volt * 6.6;
 
@@ -235,10 +240,9 @@ void loop(void)
     }
     else
     {
-        
         rpm_same = 0;
     }
-rpm_last=rpm;
+    rpm_last=rpm;
      Serial.print("Ra");Serial.print(rpm);Serial.print("@");
      Serial.print(" Rsamea");Serial.print(rpm_same);Serial.print(" Rlasta");Serial.print(rpm_last);
 
@@ -388,6 +392,17 @@ int getNewDataFromRPM(void)
     if (Serial1.available() > 0 && Serial1.read() == 'R')
     {
         rpm = Serial1.readStringUntil('@').toInt();
+    }
+}
+
+int getNewDataFromWifi(void)
+{
+    if (Serial3.available() > 0 && Serial3.read() == 'X')
+    {
+        u8g2.setCursor(100, 64);
+        u8g2.print(Serial3.readStringUntil('@'));
+        Serial3.print(Serial3.readStringUntil('@'));
+        Serial3.print("gotyou!");
     }
 }
 

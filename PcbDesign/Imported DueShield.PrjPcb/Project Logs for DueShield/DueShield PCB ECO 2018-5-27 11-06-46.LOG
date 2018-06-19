@@ -1,0 +1,48 @@
+Change Component DesignItemId : Designator=DEBUG Old DesignItemId=1X04 New DesignItemId=PINHD-1X4
+Change Component DesignItemId : Designator=ADCH Old DesignItemId=1X08 New DesignItemId=PINHD-1X8
+Change Component DesignItemId : Designator=ADCL Old DesignItemId=1X08 New DesignItemId=PINHD-1X8
+Change Component DesignItemId : Designator=COMMUNICATION Old DesignItemId=1X08 New DesignItemId=PINHD-1X8
+Change Component DesignItemId : Designator=POWER Old DesignItemId=1X08 New DesignItemId=PINHD-1X8
+Change Component DesignItemId : Designator=PWML Old DesignItemId=1X08 New DesignItemId=PINHD-1X8
+Change Component DesignItemId : Designator=PWMH Old DesignItemId=1X10 New DesignItemId=PINHD-1X10
+Change Component DesignItemId : Designator=SPI Old DesignItemId=2X03 New DesignItemId=PINHD-2X3
+Change Component DesignItemId : Designator=XIO Old DesignItemId=2X18 New DesignItemId=PINHD-2X18
+Change Component Description : Designator=ADCH Old Description= New Description=PIN HEADER
+Change Component Description : Designator=ADCL Old Description= New Description=PIN HEADER
+Change Component Description : Designator=COMMUNICATION Old Description= New Description=PIN HEADER
+Change Component Description : Designator=DEBUG Old Description= New Description=PIN HEADER
+Change Component Description : Designator=POWER Old Description= New Description=PIN HEADER
+Change Component Description : Designator=PWMH Old Description= New Description=PIN HEADER
+Change Component Description : Designator=PWML Old Description= New Description=PIN HEADER
+Change Component Description : Designator=SPI Old Description= New Description=PIN HEADER
+Change Component Description : Designator=XIO Old Description= New Description=PIN HEADER
+Change Component Library : Designator=DEBUG Old Library= New Library=pinhead.IntLib
+Change Component Library : Designator=ADCH Old Library= New Library=SmartPrj.IntLib
+Change Component Library : Designator=ADCL Old Library= New Library=SmartPrj.IntLib
+Change Component Library : Designator=COMMUNICATION Old Library= New Library=SmartPrj.IntLib
+Change Component Library : Designator=POWER Old Library= New Library=SmartPrj.IntLib
+Change Component Library : Designator=PWMH Old Library= New Library=SmartPrj.IntLib
+Change Component Library : Designator=PWML Old Library= New Library=SmartPrj.IntLib
+Change Component Library : Designator=SPI Old Library= New Library=SmartPrj.IntLib
+Change Component Library : Designator=XIO Old Library= New Library=SmartPrj.IntLib
+Change component parameters: Designator = "ADCH"; Footprint = "1X08"; UniqueID = "\REKVNSWB"
+Change component parameters. Clean all parameters for all variants
+Change component parameters (AddParameter): Name = "NAME"; Value = ""; VariantName = "[No Variations]"
+Change component parameters: Designator = "ADCL"; Footprint = "1X08"; UniqueID = "\AWFBMXJP"
+Change component parameters. Clean all parameters for all variants
+Change component parameters (AddParameter): Name = "NAME"; Value = ""; VariantName = "[No Variations]"
+Change component parameters: Designator = "COMMUNICATION"; Footprint = "1X08"; UniqueID = "\GFVNWWAM"
+Change component parameters. Clean all parameters for all variants
+Change component parameters (AddParameter): Name = "NAME"; Value = ""; VariantName = "[No Variations]"
+Change component parameters: Designator = "DEBUG"; Footprint = "1X04"; UniqueID = "\WCIVDAMR"
+Change component parameters. Clean all parameters for all variants
+Change component parameters (AddParameter): Name = "NAME"; Value = ""; VariantName = "[No Variations]"
+Change component parameters: Designator = "PWMH"; Footprint = "1X10"; UniqueID = "\KWEIVCSI"
+Change component parameters. Clean all parameters for all variants
+Change component parameters (AddParameter): Name = "NAME"; Value = ""; VariantName = "[No Variations]"
+Change component parameters: Designator = "PWML"; Footprint = "1X08"; UniqueID = "\LAEPVNPD"
+Change component parameters. Clean all parameters for all variants
+Change component parameters (AddParameter): Name = "NAME"; Value = ""; VariantName = "[No Variations]"
+Added Pin To Net: NetName=GND Pin=PWMH-6
+Added Class: Name=DueShield
+Added Room: Name=DueShield

@@ -1,0 +1,42 @@
+Importer Log Report
+Project : DueShield.PrjPcb
+
+Section : Analyze Document - C:\Users\hcxtx\Documents\GitHub\LOTe2018\PcbDesign\DueShield.brd
+    Analyzing data of C:\Users\hcxtx\Documents\GitHub\LOTe2018\PcbDesign\DueShield.brd
+    Load settings
+    Load layers 123
+    Load Library "SmartPrj"
+    Load Packages 4
+    Load Library "Arduino_Wifi_shield_v018_tG"
+    Load Packages 1
+    Load Library "pinhead"
+    Load Packages 1
+EndSection
+
+Section : Analyze Document - C:\Users\hcxtx\Documents\GitHub\LOTe2018\PcbDesign\DueShield.sch
+    Analyzing data of C:\Users\hcxtx\Documents\GitHub\LOTe2018\PcbDesign\DueShield.sch
+    Load settings
+    Load layers 123
+    Load schematic
+    Load Libraries 4
+    Load Library "supply1"
+    Load Packages 0
+    Load Symbols 2
+    Load DeviceSets 2
+    Load Library "SmartPrj"
+    Load Packages 8
+    Load Symbols 4
+    Load DeviceSets 4
+    Load Library "Arduino_Wifi_shield_v018_tG"
+    Load Packages 2
+    Load Symbols 1
+    Load DeviceSets 1
+    Load Library "pinhead"
+    Load Packages 2
+    Load Symbols 1
+    Load DeviceSets 1
+    Load Attributes 0
+    Load Classes 5
+    Load Parts 12
+    Load Sheets 1
+EndSection
