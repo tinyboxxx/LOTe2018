@@ -7,11 +7,8 @@
 #include <TimeLib.h>
 #include <DS1307RTC.h>
 #include <include/twi.h>
-<<<<<<< HEAD
 #include <ResponsiveAnalogRead.h>
-=======
 #include <InterruptFreqMeasure.h>
->>>>>>> add-speed-calculation
 
 //Serial0.debug; 
 //Serial1.rpm;
@@ -123,9 +120,8 @@ int BootedTime=0;
 int BootDistance=0;
 int BootedDistance=0;
 
-<<<<<<< HEAD
 ResponsiveAnalogRead analog(A0, true);
-=======
+
 unsigned long timebetweenRear = 0;
 unsigned long timelastRear = 0;
 unsigned long timenowRear = 0;
@@ -133,7 +129,7 @@ unsigned long timenowRear = 0;
 unsigned long timebetweenFront = 0;
 unsigned long timelastFront = 0;
 unsigned long timenowFront = 0;
->>>>>>> add-speed-calculation
+
 
 const unsigned char UBX_HEADER[] = {0xB5, 0x62};
 
