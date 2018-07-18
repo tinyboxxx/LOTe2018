@@ -437,7 +437,7 @@ int getNewDataFromRPM(void)
 {
     if (Serial1.available() > 0 && Serial1.read() == 'R')
     {
-        rpm = Serial1.readStringUntil('@').toInt();
+        rpm = Serial1.parseInt();
     }
 }
 
