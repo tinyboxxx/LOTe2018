@@ -1,4 +1,4 @@
-//2018.6.12.1
+//2018.7.30
 #include <Arduino.h>
 #include <U8g2lib.h>
 #include <SPI.h>
@@ -8,7 +8,7 @@
 #include <DS1307RTC.h>
 #include <include/twi.h>
 #include <ResponsiveAnalogRead.h>
-#include <InterruptFreqMeasure.h>
+
 
 //Serial0.debug; 
 //Serial1.rpm;
@@ -75,25 +75,6 @@ static void Wire_Init(void) {
   NVIC_SetPriority(TWI1_IRQn, 0);
   NVIC_EnableIRQ(TWI1_IRQn);
 }
-
-static void Wire1_Init(void) {
-  	pmc_enable_periph_clk(WIRE1_INTERFACE_ID);
-	PIO_Configure(
-			g_APinDescription[PIN_WIRE1_SDA].pPort,
-			g_APinDescription[PIN_WIRE1_SDA].ulPinType,
-			g_APinDescription[PIN_WIRE1_SDA].ulPin,
-			g_APinDescription[PIN_WIRE1_SDA].ulPinConfiguration);
-	PIO_Configure(
-			g_APinDescription[PIN_WIRE1_SCL].pPort,
-			g_APinDescription[PIN_WIRE1_SCL].ulPinType,
-			g_APinDescription[PIN_WIRE1_SCL].ulPin,
-			g_APinDescription[PIN_WIRE1_SCL].ulPinConfiguration);
-
-	NVIC_DisableIRQ(TWI0_IRQn);
-	NVIC_ClearPendingIRQ(TWI0_IRQn);
-	NVIC_SetPriority(TWI0_IRQn, 0);
-	NVIC_EnableIRQ(TWI0_IRQn);
-}
 //temp ends here
 
 
@@ -101,8 +82,8 @@ bool fastboot=0;
 int rpm = 0;
 int rpm_last = 0;
 int rpm_same = 0;
-float spd_hz = 0;
-int spd = 0;
+int SpeedFF = 0;
+int SpeedRR = 0;
 int temp = 0;
 
 int GearRatio = 0; //0.43-3.0
@@ -113,23 +94,40 @@ int GForceX = 0;
 int GForceY = 0;
 int GForceXScreen = GCenterX - 1;
 int GForceYScreen = GCenterY - 1;
-int GearRatioCube = 0;
 float Volt = 3.30;
-long BoostStartTime=0;
-int BootedTime=0;
-int BootDistance=0;
-int BootedDistance=0;
 
 ResponsiveAnalogRead analog(A0, true);
 
-unsigned long timebetweenRear = 0;
-unsigned long timelastRear = 0;
-unsigned long timenowRear = 0;
+int rpmFF;
+int rpm_lastFF;
+int calFF;
+volatile unsigned long lastPulseTimeFF;
+volatile unsigned long intervalFF = 0;
+const int timeoutValueFF = 10;
+volatile int timeoutCounterFF;
+int justfixedFF;
 
-unsigned long timebetweenFront = 0;
-unsigned long timelastFront = 0;
-unsigned long timenowFront = 0;
+long totalFF = 0;   // the running total
+const int numReadingsFF = 5;
+int rpmarrayFF[numReadingsFF];
+int indexFF = 0;    // the index of the current reading
+long averageFF = 0; // the average
 
+
+int rpmRR;
+int rpm_lastRR;
+int calRR;
+volatile unsigned long lastPulseTimeRR;
+volatile unsigned long intervalRR = 0;
+const int timeoutValueRR = 10;
+volatile int timeoutCounterRR;
+int justfixedRR;
+
+long totalRR = 0;   // the running total
+const int numReadingsRR = 5;
+int rpmarrayRR[numReadingsRR];
+int indexRR = 0;    // the index of the current reading
+long averageRR = 0; // the average
 
 const unsigned char UBX_HEADER[] = {0xB5, 0x62};
 
@@ -181,40 +179,48 @@ NAV_PVT pvt;
 
 void setup(void)
 {
-    u8g2.begin(); 
+    u8g2.begin();
+    u8g2.clearBuffer();
+    u8g2.sendBuffer();
     bootbmp();
     u8g2.sendBuffer();
+    
     Serial.begin(115200);  //debug
+        Serial.print("Serial Boot Success");
     Serial1.begin(115200); //rpm
+        Serial.print("RPM Connection Success");
     Serial2.begin(115200); //GPS
+        Serial.print("GPS Connection Success");
     Serial3.begin(9600);   //Wireless
 
-Serial.print("01");
-    
+    Serial.print("Wireless Connection Success");
+
     bmx055Setup();
 
-Serial.print("02");
+    Serial.print("9DOF Sensor Boot Success");
+    Serial.print("Timer Booting NOW");
+
     //time setup start here
     pinMode(SYNC_PIN, OUTPUT);
-Serial.print("03");
     digitalWrite(SYNC_PIN, LOW);
 
-Serial.print("04");
     Wire_Init();
-Serial.print("05");
+
     // Disable PDC channel
     pTwi->TWI_PTCR = UART_PTCR_RXTDIS | UART_PTCR_TXTDIS;
-Serial.print("06");
+    Serial.print("06");
     TWI_ConfigureMaster(pTwi, TWI_CLOCK, VARIANT_MCK);
     //time setup ends here
 
-Serial.print("07");
+    Serial.print("Timer Boot Success");
+
 
     pinMode(2, INPUT); //Pin2 rear  speed sonsor
     pinMode(3, INPUT); //Pin3 Front speed sonsor
-    Serial.begin(115200);
-    attachInterrupt(2, countnowRear, RISING);
-    attachInterrupt(3, countnowFront, RISING);
+
+    attachInterrupt(2, sensorIsrRR, RISING);
+    attachInterrupt(3, sensorIsrFF, RISING);
+    Serial.print("Interrupt Success");
 
     u8g2.clearBuffer();
     u8g2.sendBuffer();
@@ -225,8 +231,67 @@ void loop(void)
     u8g2.clearBuffer();
     //
     //GetNewData
-    spdRear = 6319879.2 / (timebetweenRear * NumPerCircleRear);
-    spdFront = 6319879.2 / (timebetweenFront * NumPerCircleFront);
+    
+    rpmFF = long(6319879 / calFF) / (float)intervalFF;
+    rpmRR = long(6319879 / calRR) / (float)intervalRR;
+
+//Front Speed calculation
+
+    if (timeoutCounterFF > 0)
+        timeoutCounterFF--;
+    if (timeoutCounterFF <= 0)
+        rpmFF = 0;
+
+    if (((rpmFF > (rpm_lastFF + (rpm_lastFF * .2))) || (rpmFF < (rpm_lastFF - (rpm_lastFF * .2)))) && (rpm_lastFF > 0) && (justfixedFF < 3))
+    {
+        rpmFF = rpm_lastFF;
+        justfixedFF ++ ;
+    }
+    else
+    {
+        rpm_lastFF = rpmFF;
+        justfixedFF--;
+        if (justfixedFF <= 0)
+            justfixedFF = 0;
+    }
+
+    totalFF = totalFF - rpmarrayFF[indexFF];
+    rpmarrayFF[indexFF] = rpmFF;
+    totalFF = totalFF + rpmarrayFF[indexFF];
+    indexFF = indexFF + 1;
+    if (indexFF >= numReadingsFF)
+        indexFF = 0;
+    averageFF = totalFF / numReadingsFF;
+    SpeedFF = averageFF;
+
+    //rear speed calculation
+
+    if (timeoutCounterRR > 0)
+        timeoutCounterRR--;
+    if (timeoutCounterRR <= 0)
+        rpmRR = 0;
+
+    if (((rpmRR > (rpm_lastRR + (rpm_lastRR * .2))) || (rpmRR < (rpm_lastRR - (rpm_lastRR * .2)))) && (rpm_lastRR > 0) && (justfixedRR < 3))
+    {
+        rpmRR = rpm_lastRR;
+        justfixedRR ++ ;
+    }
+    else
+    {
+        rpm_lastRR = rpmRR;
+        justfixedRR--;
+        if (justfixedRR <= 0)
+            justfixedRR = 0;
+    }
+
+    totalRR = totalRR - rpmarrayRR[indexRR];
+    rpmarrayRR[indexRR] = rpmRR;
+    totalRR = totalRR + rpmarrayRR[indexRR];
+    indexRR = indexRR + 1;
+    if (indexRR >= numReadingsRR)
+        indexRR = 0;
+    averageRR = totalRR / numReadingsRR;
+    SpeedRR = averageRR;
 
     getNewDataFromRPM();
     getNewDataFromWifi();
@@ -237,13 +302,14 @@ void loop(void)
 
     temp = getNewDataFromTemp();
 
-    GearRatio = spd * 0.17522; //#define GearRatioConstant = 0.17522;
+    GearRatio = SpeedRR * 0.17522; //#define GearRatioConstant = 0.17522;
     GearRatio = GearRatio / rpm;
 
     analog.update();
     Volt = analog.getValue();
-    Volt = Volt / 1024;
-    Volt = Volt * 6.6;
+    Volt = Volt * 0.0064453125;
+    // Volt = Volt / 1024;
+    // Volt = Volt * 6.6;
 
     getNewDataFromGPS();
 
@@ -266,20 +332,21 @@ void loop(void)
         rpm_same = 0;
     }
     rpm_last=rpm;
-     Serial.print("Ra");Serial.print(rpm);Serial.print("@");
-     Serial.print(" Rsamea");Serial.print(rpm_same);Serial.print(" Rlasta");Serial.print(rpm_last);
+    Serial.print("Ra");Serial.print(rpm);Serial.print("@");
+    Serial.print(" Rsamea");Serial.print(rpm_same);Serial.print(" Rlasta");Serial.print(rpm_last);
 
     if (RTC.read(tm))
     {
         TimeH = tm.Hour;
         TimeMM = tm.Minute;
         TimeSS = tm.Second;
+        Serial.print("time updated");
     }
 
     //
     // frames
     //
-    Serial.print("07");
+    Serial.print("Starting draw datas");
 
     u8g2.setFont(u8g2_font_6x10_tf);
     u8g2.drawStr(109, 7, "Speed");
@@ -310,7 +377,7 @@ void loop(void)
     //Speed Cube:
     u8g2.drawFrame(100, 0, 5, 47);  //211-229.5-248
     u8g2.drawBox(GForceXScreen, GForceYScreen, 3, 3); //GForceBox
-Serial.print("07");
+    Serial.print("Frame drawed");
     //-----
     //DRAW DATAS:
     //----
@@ -322,17 +389,17 @@ Serial.print("07");
     //gear
     u8g2.drawBox(68, 30 - map(GearRatio, 0, 9, 1, 19), 2, map(GearRatio, 0, 9, 1, 19));
     //speed
-    u8g2.drawBox(101, 47 - map(spd, 0, 60, 1, 47), 3, map(spd, 0, 60, 1, 47));
+    u8g2.drawBox(101, 47 - map(SpeedFF, 0, 60, 1, 47), 3, map(SpeedFF, 0, 60, 1, 47));
 
     u8g2.setFont(u8g2_font_6x10_tf);
 
     u8g2.setCursor(230, 53);
-    if(GForceX>0)
-    u8g2.print(0);
+    if (GForceX > 0)
+        u8g2.print(0);
     u8g2.print(GForceX); //gforcex
     u8g2.setCursor(230, 61);
-    if(GForceY>0)
-    u8g2.print(0);
+    if (GForceY > 0)
+        u8g2.print(0);
     u8g2.print(GForceY); //gforcey
 
     u8g2.setCursor(25, 64);
@@ -373,34 +440,26 @@ Serial.print("07");
 
     u8g2.setFont(u8g2_font_logisoso34_tn);
     u8g2.setCursor(105, 47); //speed
-    u8g2.print(spd);
+    u8g2.print(SpeedFF);
     u8g2.sendBuffer();
-Serial.print("Freshed!");
-
-
+    Serial.print("DATA Refreshed!");
 }
 
-
-void countnowRear()
+void sensorIsrFF()
 {
-    timenowRear = micros();
-    if (timenowRear - timelastRear > 40000)
-    {
-        timebetweenRear = timenowRear - timelastRear;
-        timelastRear = timenowRear;
-    }
+  unsigned long nowFF = micros();
+  intervalFF = nowFF - lastPulseTimeFF;
+  lastPulseTimeFF = nowFF;
+  timeoutCounterFF = timeoutValueFF;
 }
 
-void countnowFront()
+void sensorIsrRR()
 {
-    timenowFront = micros();
-    if (timenowFront - timelastFront > 40000)
-    {
-        timebetweenFront = timenowFront - timelastFront;
-        timelastFront = timenowFront;
-    }
+  unsigned long nowRR = micros();
+  intervalRR = nowRR - lastPulseTimeRR;
+  lastPulseTimeRR = nowRR;
+  timeoutCounterRR = timeoutValueRR;
 }
-
 
 
 /*************************************************************************

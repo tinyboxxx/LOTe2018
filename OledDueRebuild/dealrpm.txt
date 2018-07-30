@@ -1,0 +1,29 @@
+rpm = long(60e7 / cal) / (float)interval;
+
+if (timeoutCounterRR > 0)
+  timeoutCounterRR--;
+if (timeoutCounterRR <= 0)
+  rpmRR = 0;
+
+if (((rpmRR > (rpm_lastRR + (rpm_lastRR * .2))) || (rpmRR < (rpm_lastRR - (rpm_lastRR * .2)))) && (rpm_lastRR > 0) && (justfixedRR < 3))
+{
+  rpmRR = rpm_lastRR;
+  justfixedRR+;
+}
+else
+{
+  rpm_lastRR = rpmRR;
+  justfixedRR--;
+  if (justfixedRR <= 0)
+    justfixedRR = 0;
+}
+
+totalRR = totalRR - rpmarrayRR[indexRR];
+rpmarrayRR[indexRR] = rpmRR;
+totalRR = totalRR + rpmarray[indexRR];
+indexRR = indexRR + 1;
+if (indexRR >= numReadingsRR)
+  indexRR = 0;
+averageRR = totalRR / numReadingsRR;
+return averageRR;
+
