@@ -1,4 +1,4 @@
-//2018.7.30
+//2018.8.13.3
 #include <Arduino.h>
 #include <U8g2lib.h>
 #include <SPI.h>
@@ -32,6 +32,16 @@ U8G2_SSD1322_NHD_256X64_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* re
 #define Addr_Gyro 0x68
 // BMX055 Mag I2C address is 0x10(16)
 #define Addr_Mag 0x10
+
+
+// ROTARY ENCODER VARIABLES       //
+int button_pin = 4;
+int menuvar;
+int val;
+int rotaryval = 0;
+
+#define ROTARY_PIN1 27
+#define ROTARY_PIN2 29
 
 //temp starts here
 
@@ -98,32 +108,52 @@ float Volt = 3.30;
 
 ResponsiveAnalogRead analog(A0, true);
 
-int rpmFF;
-int rpm_lastFF;
-int calFF;
-volatile unsigned long lastPulseTimeFF;
-volatile unsigned long intervalFF = 0;
-const int timeoutValueFF = 10;
-volatile int timeoutCounterFF;
-int justfixedFF;
-
-long totalFF = 0;   // the running total
-const int numReadingsFF = 5;
-int rpmarrayFF[numReadingsFF];
-int indexFF = 0;    // the index of the current reading
-long averageFF = 0; // the average
+/*
+Buttons:
 
 
-int rpmRR;
-int rpm_lastRR;
-int calRR;
+Button1.    Sound Power                 LED.    D32
+Button2.    Radio                       LED.    D30
+Button3.    k3a.        D34.            LED.    D28
+Button4.    Glass Power                 LED.    D26
+Button5.    k5a.        Main Power      LED.    D24
+Button6.    k6a.        NanoDemo.D4.    LED.    D22
+
+BUZ:
+BUZ1:   D31
+BUZ2:   DAC0    D35.    NanoDemo.D3.
+
+Tone1:D10.D39.
+Tone2:D11.D37.
+Tone3:D12.D35.
+
+*/
+
+// int rpmFF;
+// int rpm_lastFF;
+// int calFF = 10;
+// volatile unsigned long lastPulseTimeFF;
+// volatile unsigned long intervalFF = 0;
+// const int timeoutValueFF = 10;
+// volatile int timeoutCounterFF;
+// int justfixedFF;
+
+// long totalFF = 0; // the running total
+// const int numReadingsFF = 5;
+// int rpmarrayFF[numReadingsFF];
+// int indexFF = 0;    // the index of the current reading
+// long averageFF = 0; // the average
+
+long rpmRR;
+long rpm_lastRR;
+int calRR = 38;
 volatile unsigned long lastPulseTimeRR;
 volatile unsigned long intervalRR = 0;
-const int timeoutValueRR = 10;
+const int timeoutValueRR = 40;
 volatile int timeoutCounterRR;
 int justfixedRR;
 
-long totalRR = 0;   // the running total
+long totalRR = 0; // the running total
 const int numReadingsRR = 5;
 int rpmarrayRR[numReadingsRR];
 int indexRR = 0;    // the index of the current reading
@@ -179,12 +209,6 @@ NAV_PVT pvt;
 
 void setup(void)
 {
-    u8g2.begin();
-    u8g2.clearBuffer();
-    u8g2.sendBuffer();
-    bootbmp();
-    u8g2.sendBuffer();
-    
     Serial.begin(115200);  //debug
         Serial.print("Serial Boot Success");
     Serial1.begin(115200); //rpm
@@ -194,6 +218,56 @@ void setup(void)
     Serial3.begin(9600);   //Wireless
 
     Serial.print("Wireless Connection Success");
+
+    pinMode(32,OUTPUT); //LED For Button1. 
+    pinMode(30,OUTPUT); //LED For Button2. 
+    pinMode(28,OUTPUT); //LED For Button3. 
+    pinMode(26,OUTPUT); //LED For Button4. 
+    pinMode(24,OUTPUT); //LED For Button5. 
+    pinMode(22,OUTPUT); //LED For Button6. 
+
+    pinMode(31,OUTPUT); //BUZ1
+    pinMode(35,OUTPUT); //BUZ2
+    pinMode(39,OUTPUT); //BUZ2 Tone1
+    pinMode(37,OUTPUT); //BUZ2 Tone2
+    pinMode(35,OUTPUT); //BUZ2 Tone3
+
+    pinMode(23,OUTPUT); //HC12 SetKey
+
+    pinMode(34,INPUT_PULLUP); //Button3.
+    pinMode(25,INPUT_PULLUP); //RoteryEncoder Button.
+
+    pinMode(2, INPUT); //Pin2 Front  speed sonsor
+    pinMode(3, INPUT); //Pin3 Rear   speed sonsor
+
+    pinMode(A1, INPUT); //PinA1 Front speed sonsor
+    pinMode(A2, INPUT); //PinA2 Rear speed sonsor
+
+    attachInterrupt(digitalPinToInterrupt(3), sensorIsrRR, FALLING);
+    // attachInterrupt(digitalPinToInterrupt(2), sensorIsrFF, FALLING);
+    Serial.print("Interrupt Success");
+
+    digitalWrite(32,HIGH);  //LED For Button1. 
+    digitalWrite(30,HIGH);  //LED For Button2. 
+    digitalWrite(28,HIGH);  //LED For Button3. 
+    digitalWrite(26,HIGH);  //LED For Button4. 
+    digitalWrite(24,HIGH);  //LED For Button5. 
+    digitalWrite(22,HIGH);  //LED For Button6. 
+    digitalWrite(31,HIGH);  //BUZ1
+
+    u8g2.begin();
+    u8g2.clearBuffer();
+    u8g2.sendBuffer();
+    bootbmp();
+    u8g2.sendBuffer();
+    
+    digitalWrite(32,LOW);  //LED For Button1. 
+    digitalWrite(30,LOW);  //LED For Button2. 
+    digitalWrite(28,LOW);  //LED For Button3. 
+    digitalWrite(26,LOW);  //LED For Button4. 
+    digitalWrite(24,LOW);  //LED For Button5. 
+    digitalWrite(22,LOW);  //LED For Button6. 
+    digitalWrite(31,LOW);  //BUZ1
 
     bmx055Setup();
 
@@ -214,62 +288,87 @@ void setup(void)
 
     Serial.print("Timer Boot Success");
 
-
-    pinMode(2, INPUT); //Pin2 rear  speed sonsor
-    pinMode(3, INPUT); //Pin3 Front speed sonsor
-
-    attachInterrupt(2, sensorIsrRR, RISING);
-    attachInterrupt(3, sensorIsrFF, RISING);
-    Serial.print("Interrupt Success");
-
     u8g2.clearBuffer();
     u8g2.sendBuffer();
 }
 
 void loop(void)
 {
+
+/*
+    int result = rotary_process();
+
+    if (result == -128)
+    {
+      rotaryval--;
+    }
+    else if (result == 64)
+    {
+      rotaryval++;
+    }
+
+    rotaryval = constrain(rotaryval, 0, 17);
+
+    //Poll the rotary encoder button to enter menu items
+    if (digitalRead(button_pin) == LOW)
+    {
+      delay(250);
+      menu_enter = 1;
+    }
+
+*/
+
+
+
     u8g2.clearBuffer();
     //
     //GetNewData
-    
-    rpmFF = long(6319879 / calFF) / (float)intervalFF;
-    rpmRR = long(6319879 / calRR) / (float)intervalRR;
 
-//Front Speed calculation
+    // rpmFF = long(60e7 / calFF) / (float)intervalFF;
+    // digitalWrite(32, LOW); //LED For Button1.
+    rpmRR = long(6319879.2 / calRR) / (float)intervalRR;
+    digitalWrite(30, LOW); //LED For Button2.
 
-    if (timeoutCounterFF > 0)
-        timeoutCounterFF--;
-    if (timeoutCounterFF <= 0)
-        rpmFF = 0;
+    // //Front Speed calculation
 
-    if (((rpmFF > (rpm_lastFF + (rpm_lastFF * .2))) || (rpmFF < (rpm_lastFF - (rpm_lastFF * .2)))) && (rpm_lastFF > 0) && (justfixedFF < 3))
-    {
-        rpmFF = rpm_lastFF;
-        justfixedFF ++ ;
-    }
-    else
-    {
-        rpm_lastFF = rpmFF;
-        justfixedFF--;
-        if (justfixedFF <= 0)
-            justfixedFF = 0;
-    }
+    // if (timeoutCounterFF > 0)
+    //     timeoutCounterFF--;
+    // if (timeoutCounterFF <= 0)
+    // {
+    //     //        rpmFF = 0;
+    // }
 
-    totalFF = totalFF - rpmarrayFF[indexFF];
-    rpmarrayFF[indexFF] = rpmFF;
-    totalFF = totalFF + rpmarrayFF[indexFF];
-    indexFF = indexFF + 1;
-    if (indexFF >= numReadingsFF)
-        indexFF = 0;
-    averageFF = totalFF / numReadingsFF;
-    SpeedFF = averageFF;
+
+    // if (((rpmFF > (rpm_lastFF + (rpm_lastFF * .2))) || (rpmFF < (rpm_lastFF - (rpm_lastFF * .2)))) && (rpm_lastFF > 0) && (justfixedFF < 3))
+    // {
+    //     rpmFF = rpm_lastFF;
+    //     justfixedFF ++ ;
+    // }
+    // else
+    // {
+    //     rpm_lastFF = rpmFF;
+    //     justfixedFF--;
+    //     if (justfixedFF <= 0)
+    //         justfixedFF = 0;
+    // }
+
+    // totalFF = totalFF - rpmarrayFF[indexFF];
+    // rpmarrayFF[indexFF] = rpmFF;
+    // totalFF = totalFF + rpmarrayFF[indexFF];
+    // indexFF = indexFF + 1;
+    // if (indexFF >= numReadingsFF)
+    //     indexFF = 0;
+    // averageFF = totalFF / numReadingsFF;
+    // SpeedFF = averageFF;
 
     //rear speed calculation
 
     if (timeoutCounterRR > 0)
         timeoutCounterRR--;
     if (timeoutCounterRR <= 0)
+    {
         rpmRR = 0;
+    }
 
     if (((rpmRR > (rpm_lastRR + (rpm_lastRR * .2))) || (rpmRR < (rpm_lastRR - (rpm_lastRR * .2)))) && (rpm_lastRR > 0) && (justfixedRR < 3))
     {
@@ -292,18 +391,23 @@ void loop(void)
         indexRR = 0;
     averageRR = totalRR / numReadingsRR;
     SpeedRR = averageRR;
+    SpeedFF = averageRR;
+    Serial.println("getting Datas");
 
     getNewDataFromRPM();
     getNewDataFromWifi();
     getNewDataFromBMX();
-
+    Serial.println("getting Gforce");
     GForceXScreen = GForceX / 90 + GCenterX - 1;
     GForceYScreen = GForceY / 90 + GCenterY - 1;
 
+    Serial.println("getting temp");
     temp = getNewDataFromTemp();
 
-    GearRatio = SpeedRR * 0.17522; //#define GearRatioConstant = 0.17522;
-    GearRatio = GearRatio / rpm;
+    // GearRatio = SpeedRR / 84.4; //#define GearRatioConstant = 0.17522;
+    // GearRatio = GearRatio / rpm;
+    GearRatio=SpeedRR*666.6;
+    GearRatio=GearRatio/rpm;
 
     analog.update();
     Volt = analog.getValue();
@@ -311,9 +415,11 @@ void loop(void)
     // Volt = Volt / 1024;
     // Volt = Volt * 6.6;
 
-    getNewDataFromGPS();
+    // getNewDataFromGPS();
 
-    // Serial3.print("R");Serial3.print(rpm);Serial3.print("@");
+    Serial.println("data got");
+
+     Serial3.print("R");Serial3.print(rpm);Serial3.print("@");
      Serial.print("R");Serial.print(rpm);Serial.print("@");
      Serial.print(" Rsame");Serial.print(rpm_same);Serial.print(" Rlast");Serial.print(rpm_last);
 
@@ -383,9 +489,9 @@ void loop(void)
     //----
 
     //temp
-    if (temp > 40)
+    if (temp > 50)
         u8g2.drawStr(150, 7, "!");
-    u8g2.drawBox(153, 30 - map(temp, 20, 60, 1, 19), 2, map(temp, 20, 60, 1, 19));
+    u8g2.drawBox(153, 30 - map(temp, 20, 70, 1, 19), 2, map(temp, 20, 70, 1, 19));
     //gear
     u8g2.drawBox(68, 30 - map(GearRatio, 0, 9, 1, 19), 2, map(GearRatio, 0, 9, 1, 19));
     //speed
@@ -406,11 +512,19 @@ void loop(void)
     if (rpm <= 5000)
     {
         u8g2.print(rpm); //rpm
+        Serial3.print("R");Serial3.print(rpm);Serial3.print("@");
     }
     else
     {
         u8g2.print("0000"); //rpm
+        Serial3.print("R");Serial3.print("0000");Serial3.print("@");
     }
+
+    u8g2.print("  G1:"); 
+    u8g2.print(SpeedRR*666.6); 
+    u8g2.print("  G2:"); 
+    u8g2.print((float)SpeedRR*666.6/rpm*1.0); 
+
 
     u8g2.setFont(u8g2_font_logisoso18_tr);
     u8g2.setCursor(0, 52);
@@ -422,6 +536,7 @@ void loop(void)
     
     u8g2.setCursor(157, 29);
     u8g2.print(temp);
+    Serial3.print("T");Serial3.print("temp");Serial3.print("@");
 
     if (GearRatio == 0)
     {
@@ -433,34 +548,41 @@ void loop(void)
         u8g2.setCursor(72, 29);
         u8g2.print(GearRatio);
     }
+    Serial3.print("G");Serial3.print("temp");Serial3.print("@");
 
     u8g2.setCursor(0, 29);
     u8g2.print(Volt); //battery
     u8g2.print("V"); //battery
+    Serial3.print("V");Serial3.print(Volt);Serial3.print("@");
+
 
     u8g2.setFont(u8g2_font_logisoso34_tn);
     u8g2.setCursor(105, 47); //speed
     u8g2.print(SpeedFF);
+    Serial3.print("S");Serial3.print(SpeedFF);Serial3.print("@");
+
+
     u8g2.sendBuffer();
-    Serial.print("DATA Refreshed!");
+    Serial.println("DATA Refreshed!");
 }
 
-void sensorIsrFF()
-{
-  unsigned long nowFF = micros();
-  intervalFF = nowFF - lastPulseTimeFF;
-  lastPulseTimeFF = nowFF;
-  timeoutCounterFF = timeoutValueFF;
-}
+// void sensorIsrFF()
+// {
+//     unsigned long nowFF = micros();
+//     intervalFF = nowFF - lastPulseTimeFF;
+//     lastPulseTimeFF = nowFF;
+//     timeoutCounterFF = timeoutValueFF;
+//     digitalWrite(32, HIGH); //LED For Button1.
+// }
 
 void sensorIsrRR()
 {
-  unsigned long nowRR = micros();
-  intervalRR = nowRR - lastPulseTimeRR;
-  lastPulseTimeRR = nowRR;
-  timeoutCounterRR = timeoutValueRR;
+    unsigned long nowRR = micros();
+    intervalRR = nowRR - lastPulseTimeRR;
+    lastPulseTimeRR = nowRR;
+    timeoutCounterRR = timeoutValueRR;
+    digitalWrite(30,HIGH);  //LED For Button2. 
 }
-
 
 /*************************************************************************
 //Function to calculate the distance between two waypoints
@@ -504,16 +626,14 @@ int getNewDataFromWifi(void)
 {
     if (Serial3.available() > 0 && Serial3.read() == 'X')
     {
-        u8g2.setCursor(100, 64);
+        u8g2.setCursor(120, 64);
         u8g2.print(Serial3.readStringUntil('@'));
-        Serial3.print(Serial3.readStringUntil('@'));
         Serial3.print("gotyou!");
     }
 }
 
 void getNewDataFromGPS(void)
 {
-
     if (processGPS())
     {
         Serial.print("#SV: ");
@@ -674,6 +794,7 @@ void bootbmp(void)
     #define boot_width 131
     #define boot_height 60
     u8g2.drawXBMP(65, 0, boot_width, boot_height, boot_bits); 
+    delay(2000);
 };
 
 void bmx055Setup()
@@ -980,3 +1101,13 @@ static inline bool TWI_FailedAcknowledge(Twi *pTwi) {
   return pTwi->TWI_SR & TWI_SR_NACK;
 }
 //👆temp function ends here
+
+/*
+char rotary_process()
+{
+  char pinstate = (digitalRead(ROTARY_PIN2) << 1) | digitalRead(ROTARY_PIN1);
+  state = ttable[state & 0xf][pinstate];
+  return (state & 0xc0);
+}
+
+*/
