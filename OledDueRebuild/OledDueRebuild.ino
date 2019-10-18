@@ -1,4 +1,8 @@
-//2018.8.13.3
+#include <DueFlashStorage.h>
+#include <efc.h>
+#include <flash_efc.h>
+
+//2018.8.15.3
 #include <Arduino.h>
 #include <U8g2lib.h>
 #include <SPI.h>
@@ -8,6 +12,9 @@
 #include <DS1307RTC.h>
 #include <include/twi.h>
 #include <ResponsiveAnalogRead.h>
+#include <Adafruit_MLX90614.h>
+#include <Encoder.h>
+
 
 
 //Serial0.debug; 
@@ -17,6 +24,8 @@
 
 //Pin2 rear  speed sonsor
 //Pin3 Front speed sonsor
+DueFlashStorage dueFlashStorage;
+
 
 U8G2_SSD1322_NHD_256X64_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* reset=*/ 8);	
 //!!!IMPORTANT!!! GO Enable U8G2_16BIT in u8g2.h
@@ -33,59 +42,6 @@ U8G2_SSD1322_NHD_256X64_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 10, /* dc=*/ 9, /* re
 // BMX055 Mag I2C address is 0x10(16)
 #define Addr_Mag 0x10
 
-
-// ROTARY ENCODER VARIABLES       //
-int button_pin = 4;
-int menuvar;
-int val;
-int rotaryval = 0;
-
-#define ROTARY_PIN1 27
-#define ROTARY_PIN2 29
-
-//temp starts here
-
-#define ADDR      0x5A
-
-//EEPROM 32x16
-#define TO_MAX    0x00
-#define TO_MIN    0x01
-#define PWM_CTRL  0x02
-
-//RAM 32x16
-#define RAW_IR_1  0x04
-#define RAW_IR_2  0x05
-#define TA        0x06
-#define TOBJ_1    0x07
-#define TOBJ_2    0x08
-
-#define SYNC_PIN  2
-
-static const uint32_t TWI_CLOCK = 100000;
-static const uint32_t RECV_TIMEOUT = 100000;
-static const uint32_t XMIT_TIMEOUT = 100000;
-
-Twi *pTwi = WIRE_INTERFACE;
-
-static void Wire_Init(void) {
-  pmc_enable_periph_clk(WIRE_INTERFACE_ID);
-  PIO_Configure(
-  g_APinDescription[PIN_WIRE_SDA].pPort,
-  g_APinDescription[PIN_WIRE_SDA].ulPinType,
-  g_APinDescription[PIN_WIRE_SDA].ulPin,
-  g_APinDescription[PIN_WIRE_SDA].ulPinConfiguration);
-  PIO_Configure(
-  g_APinDescription[PIN_WIRE_SCL].pPort,
-  g_APinDescription[PIN_WIRE_SCL].ulPinType,
-  g_APinDescription[PIN_WIRE_SCL].ulPin,
-  g_APinDescription[PIN_WIRE_SCL].ulPinConfiguration);
-
-  NVIC_DisableIRQ(TWI1_IRQn);
-  NVIC_ClearPendingIRQ(TWI1_IRQn);
-  NVIC_SetPriority(TWI1_IRQn, 0);
-  NVIC_EnableIRQ(TWI1_IRQn);
-}
-//temp ends here
 
 
 bool fastboot=0;
@@ -106,7 +62,18 @@ int GForceXScreen = GCenterX - 1;
 int GForceYScreen = GCenterY - 1;
 float Volt = 3.30;
 
+double wheelrange=0.0; //  0.1755522 meter per rotation
+float wheelrangeContant = 0.003;//0.00292587 at beganing 0.003
+int wheelrangeContantStore = 30;
+
+
+
+
+
+
 ResponsiveAnalogRead analog(A0, true);
+
+
 
 /*
 Buttons:
@@ -149,7 +116,7 @@ long rpm_lastRR;
 int calRR = 38;
 volatile unsigned long lastPulseTimeRR;
 volatile unsigned long intervalRR = 0;
-const int timeoutValueRR = 40;
+const int timeoutValueRR = 5;
 volatile int timeoutCounterRR;
 int justfixedRR;
 
@@ -158,6 +125,8 @@ const int numReadingsRR = 5;
 int rpmarrayRR[numReadingsRR];
 int indexRR = 0;    // the index of the current reading
 long averageRR = 0; // the average
+
+String lastWords = "-=SUES BAJA 2018 =-";
 
 const unsigned char UBX_HEADER[] = {0xB5, 0x62};
 
@@ -206,9 +175,23 @@ struct NAV_PVT
 };
 
 NAV_PVT pvt;
+Adafruit_MLX90614 mlx = Adafruit_MLX90614();
+
+Encoder myEnc(27, 29);
+long oldPosition  = -999;
+
+
+int MenuPage=0;
+boolean EnterPageSetting=false;
+boolean pushingButton=false;
 
 void setup(void)
 {
+  myEnc.write(0);
+  
+    wheelrangeContantStore = dueFlashStorage.read(1);
+    wheelrangeContant = (wheelrangeContantStore/1000.1);
+    
     Serial.begin(115200);  //debug
         Serial.print("Serial Boot Success");
     Serial1.begin(115200); //rpm
@@ -216,7 +199,7 @@ void setup(void)
     Serial2.begin(115200); //GPS
         Serial.print("GPS Connection Success");
     Serial3.begin(9600);   //Wireless
-
+    Serial3.print("Wireless Connection Success");   //Wireless
     Serial.print("Wireless Connection Success");
 
     pinMode(32,OUTPUT); //LED For Button1. 
@@ -233,9 +216,9 @@ void setup(void)
     pinMode(35,OUTPUT); //BUZ2 Tone3
 
     pinMode(23,OUTPUT); //HC12 SetKey
+    
 
     pinMode(34,INPUT_PULLUP); //Button3.
-    pinMode(25,INPUT_PULLUP); //RoteryEncoder Button.
 
     pinMode(2, INPUT); //Pin2 Front  speed sonsor
     pinMode(3, INPUT); //Pin3 Rear   speed sonsor
@@ -243,8 +226,16 @@ void setup(void)
     pinMode(A1, INPUT); //PinA1 Front speed sonsor
     pinMode(A2, INPUT); //PinA2 Rear speed sonsor
 
+    pinMode(25, INPUT_PULLUP); //ROT Button
+    pinMode(27, INPUT); //ROT 1
+    pinMode(29, INPUT); //ROT 2
+    
+
     attachInterrupt(digitalPinToInterrupt(3), sensorIsrRR, FALLING);
     // attachInterrupt(digitalPinToInterrupt(2), sensorIsrFF, FALLING);
+
+    attachInterrupt(digitalPinToInterrupt(25), MenuButtonPressed, FALLING);
+
     Serial.print("Interrupt Success");
 
     digitalWrite(32,HIGH);  //LED For Button1. 
@@ -254,6 +245,7 @@ void setup(void)
     digitalWrite(24,HIGH);  //LED For Button5. 
     digitalWrite(22,HIGH);  //LED For Button6. 
     digitalWrite(31,HIGH);  //BUZ1
+    digitalWrite(23,HIGH);  //HC12 SET Key
 
     u8g2.begin();
     u8g2.clearBuffer();
@@ -272,21 +264,9 @@ void setup(void)
     bmx055Setup();
 
     Serial.print("9DOF Sensor Boot Success");
-    Serial.print("Timer Booting NOW");
 
-    //time setup start here
-    pinMode(SYNC_PIN, OUTPUT);
-    digitalWrite(SYNC_PIN, LOW);
 
-    Wire_Init();
-
-    // Disable PDC channel
-    pTwi->TWI_PTCR = UART_PTCR_RXTDIS | UART_PTCR_TXTDIS;
-    Serial.print("06");
-    TWI_ConfigureMaster(pTwi, TWI_CLOCK, VARIANT_MCK);
-    //time setup ends here
-
-    Serial.print("Timer Boot Success");
+    mlx.begin();
 
     u8g2.clearBuffer();
     u8g2.sendBuffer();
@@ -295,277 +275,349 @@ void setup(void)
 void loop(void)
 {
 
-/*
-    int result = rotary_process();
-
-    if (result == -128)
+    if (MenuPage > 0)
     {
-      rotaryval--;
-    }
-    else if (result == 64)
-    {
-      rotaryval++;
-    }
+        if (MenuPage == 1 && pushingButton) //in the exit page,going out
+        {
+            delay(250);
+            MenuPage = 0;
+            pushingButton = 0;
+            EnterPageSetting = 0;
+            delay(150);
+        }
 
-    rotaryval = constrain(rotaryval, 0, 17);
+        if (EnterPageSetting == 0)
+        {
+            if (pushingButton)
+            {
+                EnterPageSetting = 1;
+                pushingButton = 0;
+                delay(150);
+            }
 
-    //Poll the rotary encoder button to enter menu items
-    if (digitalRead(button_pin) == LOW)
-    {
-      delay(250);
-      menu_enter = 1;
-    }
+            long newPosition = myEnc.read();
 
-*/
-
-
-
-    u8g2.clearBuffer();
-    //
-    //GetNewData
-
-    // rpmFF = long(60e7 / calFF) / (float)intervalFF;
-    // digitalWrite(32, LOW); //LED For Button1.
-    rpmRR = long(6319879.2 / calRR) / (float)intervalRR;
-    digitalWrite(30, LOW); //LED For Button2.
-
-    // //Front Speed calculation
-
-    // if (timeoutCounterFF > 0)
-    //     timeoutCounterFF--;
-    // if (timeoutCounterFF <= 0)
-    // {
-    //     //        rpmFF = 0;
-    // }
-
-
-    // if (((rpmFF > (rpm_lastFF + (rpm_lastFF * .2))) || (rpmFF < (rpm_lastFF - (rpm_lastFF * .2)))) && (rpm_lastFF > 0) && (justfixedFF < 3))
-    // {
-    //     rpmFF = rpm_lastFF;
-    //     justfixedFF ++ ;
-    // }
-    // else
-    // {
-    //     rpm_lastFF = rpmFF;
-    //     justfixedFF--;
-    //     if (justfixedFF <= 0)
-    //         justfixedFF = 0;
-    // }
-
-    // totalFF = totalFF - rpmarrayFF[indexFF];
-    // rpmarrayFF[indexFF] = rpmFF;
-    // totalFF = totalFF + rpmarrayFF[indexFF];
-    // indexFF = indexFF + 1;
-    // if (indexFF >= numReadingsFF)
-    //     indexFF = 0;
-    // averageFF = totalFF / numReadingsFF;
-    // SpeedFF = averageFF;
-
-    //rear speed calculation
-
-    if (timeoutCounterRR > 0)
-        timeoutCounterRR--;
-    if (timeoutCounterRR <= 0)
-    {
-        rpmRR = 0;
-    }
-
-    if (((rpmRR > (rpm_lastRR + (rpm_lastRR * .2))) || (rpmRR < (rpm_lastRR - (rpm_lastRR * .2)))) && (rpm_lastRR > 0) && (justfixedRR < 3))
-    {
-        rpmRR = rpm_lastRR;
-        justfixedRR ++ ;
-    }
-    else
-    {
-        rpm_lastRR = rpmRR;
-        justfixedRR--;
-        if (justfixedRR <= 0)
-            justfixedRR = 0;
-    }
-
-    totalRR = totalRR - rpmarrayRR[indexRR];
-    rpmarrayRR[indexRR] = rpmRR;
-    totalRR = totalRR + rpmarrayRR[indexRR];
-    indexRR = indexRR + 1;
-    if (indexRR >= numReadingsRR)
-        indexRR = 0;
-    averageRR = totalRR / numReadingsRR;
-    SpeedRR = averageRR;
-    SpeedFF = averageRR;
-    Serial.println("getting Datas");
-
-    getNewDataFromRPM();
-    getNewDataFromWifi();
-    getNewDataFromBMX();
-    Serial.println("getting Gforce");
-    GForceXScreen = GForceX / 90 + GCenterX - 1;
-    GForceYScreen = GForceY / 90 + GCenterY - 1;
-
-    Serial.println("getting temp");
-    temp = getNewDataFromTemp();
-
-    // GearRatio = SpeedRR / 84.4; //#define GearRatioConstant = 0.17522;
-    // GearRatio = GearRatio / rpm;
-    GearRatio=SpeedRR*666.6;
-    GearRatio=GearRatio/rpm;
-
-    analog.update();
-    Volt = analog.getValue();
-    Volt = Volt * 0.0064453125;
-    // Volt = Volt / 1024;
-    // Volt = Volt * 6.6;
-
-    // getNewDataFromGPS();
-
-    Serial.println("data got");
-
-     Serial3.print("R");Serial3.print(rpm);Serial3.print("@");
-     Serial.print("R");Serial.print(rpm);Serial.print("@");
-     Serial.print(" Rsame");Serial.print(rpm_same);Serial.print(" Rlast");Serial.print(rpm_last);
-
-    tmElements_t tm;
-
-    //data postProcess
-    if (rpm_last == rpm) //Drop Outdate RPM
-    {
-        if (rpm_same >= 5)
-            rpm = 0;
+            if (newPosition > oldPosition)
+            {
+                oldPosition = newPosition;
+                Serial.print(" Pos:");
+                Serial.print(newPosition);
+                MenuPage++;
+            }
+            else if (newPosition < oldPosition && MenuPage > 1)
+            {
+                oldPosition = newPosition;
+                MenuPage--;
+            }
+        }
         else
-            rpm_same++;
+        {
+            if (pushingButton)
+            {
+                EnterPageSetting = 0;
+                pushingButton = 0;
+                delay(150);
+            }
+        }
+
+        u8g2.setFont(u8g2_font_logisoso34_tn);
+        u8g2.setCursor(105, 47);
+        u8g2.print(MenuPage);
+        u8g2.print(EnterPageSetting);
+
+        Serial.print(" read:");
+        Serial.print(myEnc.read());
+        Serial.print(" EnterPageSetting:");
+        Serial.print(EnterPageSetting);
+        Serial.print(" MenuPage:");
+        Serial.print(MenuPage);
+        Serial.println(" ");
+
+        u8g2.sendBuffer();
+        u8g2.clearBuffer();
+
+        delay(150);
     }
     else
     {
-        rpm_same = 0;
-    }
-    rpm_last=rpm;
-    Serial.print("Ra");Serial.print(rpm);Serial.print("@");
-    Serial.print(" Rsamea");Serial.print(rpm_same);Serial.print(" Rlasta");Serial.print(rpm_last);
+        if (pushingButton == true)
+        {
 
-    if (RTC.read(tm))
-    {
-        TimeH = tm.Hour;
-        TimeMM = tm.Minute;
-        TimeSS = tm.Second;
-        Serial.print("time updated");
-    }
+            Serial.println("here13");
+            MenuPage = 1;
+            // digitalWrite(31, HIGH); //BUZ1
+            // delay(100);
+            // digitalWrite(31, LOW); //BUZ1
+            Serial.println("here3");
+            pushingButton = false;
+        }
 
-    //
-    // frames
-    //
-    Serial.print("Starting draw datas");
+        u8g2.clearBuffer();
+        //
+        //GetNewData
 
-    u8g2.setFont(u8g2_font_6x10_tf);
-    u8g2.drawStr(109, 7, "Speed");
-    u8g2.drawStr(151, 7, " Temp");
-    u8g2.drawStr(68, 7, "Gear");
-    u8g2.drawStr(0, 64, "RPM:");
-    u8g2.drawStr(213, 53, "Gx:");
-    u8g2.drawStr(213, 61, "Gy:");
-    u8g2.drawStr(0, 7, "Volt");
+        // rpmFF = long(60e7 / calFF) / (float)intervalFF;
+        // digitalWrite(32, LOW); //LED For Button1.
+        rpmRR = long(6319879.2 / calRR) / (float)intervalRR;
+        digitalWrite(30, LOW); //LED For Button5.
+
+        // //Front Speed calculation
+
+        // if (timeoutCounterFF > 0)
+        //     timeoutCounterFF--;
+        // if (timeoutCounterFF <= 0)
+        // {
+        //     //        rpmFF = 0;
+        // }
+
+        // if (((rpmFF > (rpm_lastFF + (rpm_lastFF * .2))) || (rpmFF < (rpm_lastFF - (rpm_lastFF * .2)))) && (rpm_lastFF > 0) && (justfixedFF < 3))
+        // {
+        //     rpmFF = rpm_lastFF;
+        //     justfixedFF ++ ;
+        // }
+        // else
+        // {
+        //     rpm_lastFF = rpmFF;
+        //     justfixedFF--;
+        //     if (justfixedFF <= 0)
+        //         justfixedFF = 0;
+        // }
+
+        // totalFF = totalFF - rpmarrayFF[indexFF];
+        // rpmarrayFF[indexFF] = rpmFF;
+        // totalFF = totalFF + rpmarrayFF[indexFF];
+        // indexFF = indexFF + 1;
+        // if (indexFF >= numReadingsFF)
+        //     indexFF = 0;
+        // averageFF = totalFF / numReadingsFF;
+        // SpeedFF = averageFF;
+
+        //rear speed calculation
+
+        if (timeoutCounterRR > 0)
+            timeoutCounterRR--;
+        if (timeoutCounterRR <= 0)
+        {
+            rpmRR = 0;
+        }
+
+        if (((rpmRR > (rpm_lastRR + (rpm_lastRR * .2))) || (rpmRR < (rpm_lastRR - (rpm_lastRR * .2)))) && (rpm_lastRR > 0) && (justfixedRR < 3))
+        {
+            rpmRR = rpm_lastRR;
+            justfixedRR++;
+        }
+        else
+        {
+            rpm_lastRR = rpmRR;
+            justfixedRR--;
+            if (justfixedRR <= 0)
+                justfixedRR = 0;
+        }
+
+        totalRR = totalRR - rpmarrayRR[indexRR];
+        rpmarrayRR[indexRR] = rpmRR;
+        totalRR = totalRR + rpmarrayRR[indexRR];
+        indexRR = indexRR + 1;
+        if (indexRR >= numReadingsRR)
+            indexRR = 0;
+        averageRR = totalRR / numReadingsRR;
+        if (averageRR < 100)
+        {
+            SpeedRR = averageRR;
+            SpeedFF = averageRR;
+        }
+        Serial.println("getting Datas");
+
+        getNewDataFromRPM();
+        Serial.println("getting Wifi");
+        getNewDataFromWifi();
+        Serial.println("getting BMX");
+        getNewDataFromBMX();
+        Serial.println("got Gforce");
+        GForceXScreen = GForceX / 90 + GCenterX - 1;
+        GForceYScreen = GForceY / 90 + GCenterY - 1;
+
+        Serial.println("getting temp");
+        temp = mlx.readObjectTempC();
+
+        // GearRatio = SpeedRR / 84.4; //#define GearRatioConstant = 0.17522;
+        // GearRatio = GearRatio / rpm;
+        GearRatio = SpeedRR * 611.1;
+        GearRatio = GearRatio / rpm;
+
+        analog.update();
+        Volt = analog.getValue();
+        Volt = Volt * 0.0064453125;
+        // Volt = Volt / 1024;
+        // Volt = Volt * 6.6;
+
+        // getNewDataFromGPS();
+
+        Serial.println("data got");
+
+        //Serial3.print("R");Serial3.print(rpm);Serial3.print("@");
+        Serial.print("R");
+        Serial.print(rpm);
+        Serial.print("@");
+        Serial.print(" Rsame");
+        Serial.print(rpm_same);
+        Serial.print(" Rlast");
+        Serial.print(rpm_last);
+
+        tmElements_t tm;
+
+        //data postProcess
+        if (rpm_last == rpm) //Drop Outdate RPM
+        {
+            if (rpm_same >= 5)
+                rpm = 0;
+            else
+                rpm_same++;
+        }
+        else
+        {
+            rpm_same = 0;
+        }
+        rpm_last = rpm;
+        Serial.print("Ra");
+        Serial.print(rpm);
+        Serial.print("@");
+        Serial.print(" Rsamea");
+        Serial.print(rpm_same);
+        Serial.print(" Rlasta");
+        Serial.print(rpm_last);
+
+        if (RTC.read(tm))
+        {
+            TimeH = tm.Hour;
+            TimeMM = tm.Minute;
+            TimeSS = tm.Second;
+            Serial.print("time updated");
+        }
+
+        //
+        // frames
+        //
+        Serial.print("Starting draw datas");
+
+        u8g2.setFont(u8g2_font_6x10_tf);
+        u8g2.drawStr(109, 7, "Speed");
+        u8g2.drawStr(151, 7, " Temp");
+        u8g2.drawStr(68, 7, "Gear");
+        u8g2.drawStr(0, 64, "RPM:");
+        u8g2.drawStr(213, 53, "Gx:");
+        u8g2.drawStr(213, 61, "Gy:");
+        u8g2.drawStr(0, 7, "Volt");
 
 #define GCenterX 233 //211-229.5-248
 #define GCenterY 21  //0-18-37
 #define GCenter18 21 //size
 #define GCenter9 11  //half size
 
-    //GForceCube:
-    u8g2.drawFrame(GCenterX - GCenter18, GCenterY - GCenter18, 2 * GCenter18 + 1, 2 * GCenter18 + 1); //211-229.5-248
-    u8g2.drawFrame(GCenterX - GCenter9, GCenterY - GCenter9, 2 * GCenter9 + 1, 2 * GCenter9 + 1);     //220-229.5-239
-    u8g2.drawLine(GCenterX, GCenterY - GCenter18, GCenterX, GCenterY - 1);
-    u8g2.drawLine(GCenterX, GCenterY + 1, GCenterX, 2 * GCenter18);
-    u8g2.drawLine(GCenterX - GCenter18, GCenterY, GCenterX - 1, GCenterY);
-    u8g2.drawLine(GCenterX + 1, GCenterY, GCenterX + GCenter18, GCenterY);
+        //GForceCube:
+        u8g2.drawFrame(GCenterX - GCenter18, GCenterY - GCenter18, 2 * GCenter18 + 1, 2 * GCenter18 + 1); //211-229.5-248
+        u8g2.drawFrame(GCenterX - GCenter9, GCenterY - GCenter9, 2 * GCenter9 + 1, 2 * GCenter9 + 1);     //220-229.5-239
+        u8g2.drawLine(GCenterX, GCenterY - GCenter18, GCenterX, GCenterY - 1);
+        u8g2.drawLine(GCenterX, GCenterY + 1, GCenterX, 2 * GCenter18);
+        u8g2.drawLine(GCenterX - GCenter18, GCenterY, GCenterX - 1, GCenterY);
+        u8g2.drawLine(GCenterX + 1, GCenterY, GCenterX + GCenter18, GCenterY);
 
-    //Temp Cube:
-    u8g2.drawFrame(152, 11, 4, 19); //211-229.5-248
-    //Gear Cube:
-    u8g2.drawFrame(67, 11, 4, 19);  //211-229.5-248
-    //Speed Cube:
-    u8g2.drawFrame(100, 0, 5, 47);  //211-229.5-248
-    u8g2.drawBox(GForceXScreen, GForceYScreen, 3, 3); //GForceBox
-    Serial.print("Frame drawed");
-    //-----
-    //DRAW DATAS:
-    //----
+        //Temp Cube:
+        u8g2.drawFrame(152, 11, 4, 19); //211-229.5-248
+        //Gear Cube:
+        u8g2.drawFrame(67, 11, 4, 19); //211-229.5-248
+        //Speed Cube:
+        u8g2.drawFrame(100, 0, 5, 47);                    //211-229.5-248
+        u8g2.drawBox(GForceXScreen, GForceYScreen, 3, 3); //GForceBox
+        Serial.print("Frame drawed");
+        //-----
+        //DRAW DATAS:
+        //----
 
-    //temp
-    if (temp > 50)
-        u8g2.drawStr(150, 7, "!");
-    u8g2.drawBox(153, 30 - map(temp, 20, 70, 1, 19), 2, map(temp, 20, 70, 1, 19));
-    //gear
-    u8g2.drawBox(68, 30 - map(GearRatio, 0, 9, 1, 19), 2, map(GearRatio, 0, 9, 1, 19));
-    //speed
-    u8g2.drawBox(101, 47 - map(SpeedFF, 0, 60, 1, 47), 3, map(SpeedFF, 0, 60, 1, 47));
+        //temp
+        if (temp > 50)
+            u8g2.drawStr(150, 7, "!");
+        u8g2.drawBox(153, 30 - map(temp, 20, 70, 1, 19), 2, map(temp, 20, 70, 1, 19));
+        //gear
+        u8g2.drawBox(68, 30 - map(GearRatio, 0, 9, 1, 19), 2, map(GearRatio, 0, 9, 1, 19));
+        //speed
+        u8g2.drawBox(101, 47 - map(SpeedFF, 0, 60, 1, 47), 3, map(SpeedFF, 0, 60, 1, 47));
 
-    u8g2.setFont(u8g2_font_6x10_tf);
+        u8g2.setFont(u8g2_font_6x10_tf);
 
-    u8g2.setCursor(230, 53);
-    if (GForceX > 0)
-        u8g2.print(0);
-    u8g2.print(GForceX); //gforcex
-    u8g2.setCursor(230, 61);
-    if (GForceY > 0)
-        u8g2.print(0);
-    u8g2.print(GForceY); //gforcey
+        u8g2.setCursor(230, 53);
+        if (GForceX > 0)
+            u8g2.print(0);
+        u8g2.print(GForceX); //gforcex
+        u8g2.setCursor(230, 61);
+        if (GForceY > 0)
+            u8g2.print(0);
+        u8g2.print(GForceY); //gforcey
 
-    u8g2.setCursor(25, 64);
-    if (rpm <= 5000)
-    {
-        u8g2.print(rpm); //rpm
-        Serial3.print("R");Serial3.print(rpm);Serial3.print("@");
+        u8g2.setCursor(25, 64);
+        if ((rpm <= 5000) && (rpm > 1000))
+        {
+            u8g2.print(rpm); //rpm
+            //Serial3.print("R");Serial3.print(rpm);Serial3.print("@");
+        }
+        else
+        {
+            u8g2.print("0000"); //rpm
+            //Serial3.print("R");Serial3.print("0000");Serial3.print("@");
+        }
+        u8g2.setCursor(53, 64);
+        u8g2.print("TRIP:"); //0.00292587
+        u8g2.print(wheelrange);
+        u8g2.print("M");
+
+        u8g2.print("  ");
+        u8g2.print(lastWords);
+
+        u8g2.setFont(u8g2_font_logisoso18_tr);
+        u8g2.setCursor(0, 52);
+        display2digits(TimeH); //time
+        u8g2.print(":");
+        display2digits(TimeMM); //time
+        u8g2.print(":");
+        display2digits(TimeSS); //time
+
+        u8g2.setCursor(157, 29);
+        u8g2.print(temp);
+        Serial3.print("T");
+        Serial3.print(temp);
+        Serial3.print("@");
+
+        if (GearRatio == 0)
+        {
+            u8g2.setCursor(72, 29);
+            u8g2.print("N");
+        }
+        else
+        {
+            u8g2.setCursor(72, 29);
+            u8g2.print(GearRatio);
+        }
+        //Serial3.print("G");Serial3.print(GearRatio);Serial3.print("@");
+
+        u8g2.setCursor(0, 29);
+        u8g2.print(Volt); //battery
+        u8g2.print("V");  //battery
+        Serial3.print("V");
+        Serial3.print(Volt);
+        Serial3.print("@");
+
+        u8g2.setFont(u8g2_font_logisoso34_tn);
+        u8g2.setCursor(105, 47); //speed
+        u8g2.print(SpeedFF);
+        Serial3.print("S");
+        Serial3.print(SpeedFF);
+        Serial3.print("@");
+
+        Serial3.println("");
+        u8g2.sendBuffer();
+        Serial.println("DATA Refreshed!");
     }
-    else
-    {
-        u8g2.print("0000"); //rpm
-        Serial3.print("R");Serial3.print("0000");Serial3.print("@");
-    }
-
-    u8g2.print("  G1:"); 
-    u8g2.print(SpeedRR*666.6); 
-    u8g2.print("  G2:"); 
-    u8g2.print((float)SpeedRR*666.6/rpm*1.0); 
-
-
-    u8g2.setFont(u8g2_font_logisoso18_tr);
-    u8g2.setCursor(0, 52);
-    display2digits(TimeH); //time
-    u8g2.print(":");
-    display2digits(TimeMM); //time
-    u8g2.print(":");
-    display2digits(TimeSS); //time
-    
-    u8g2.setCursor(157, 29);
-    u8g2.print(temp);
-    Serial3.print("T");Serial3.print("temp");Serial3.print("@");
-
-    if (GearRatio == 0)
-    {
-        u8g2.setCursor(72, 29);
-        u8g2.print("N");
-    }
-    else
-    {
-        u8g2.setCursor(72, 29);
-        u8g2.print(GearRatio);
-    }
-    Serial3.print("G");Serial3.print("temp");Serial3.print("@");
-
-    u8g2.setCursor(0, 29);
-    u8g2.print(Volt); //battery
-    u8g2.print("V"); //battery
-    Serial3.print("V");Serial3.print(Volt);Serial3.print("@");
-
-
-    u8g2.setFont(u8g2_font_logisoso34_tn);
-    u8g2.setCursor(105, 47); //speed
-    u8g2.print(SpeedFF);
-    Serial3.print("S");Serial3.print(SpeedFF);Serial3.print("@");
-
-
-    u8g2.sendBuffer();
-    Serial.println("DATA Refreshed!");
 }
-
 // void sensorIsrFF()
 // {
 //     unsigned long nowFF = micros();
@@ -582,6 +634,13 @@ void sensorIsrRR()
     lastPulseTimeRR = nowRR;
     timeoutCounterRR = timeoutValueRR;
     digitalWrite(30,HIGH);  //LED For Button2. 
+    wheelrange+=wheelrangeContant;//0.00292587
+}
+
+void MenuButtonPressed()
+{
+    if (pushingButton == false)
+        pushingButton = true;
 }
 
 /*************************************************************************
@@ -614,21 +673,21 @@ float calc_dist(float flat1, float flon1, float flat2, float flon2)
     return dist_calc;
 }
 
-int getNewDataFromRPM(void)
+void getNewDataFromRPM(void)
 {
     if (Serial1.available() > 0 && Serial1.read() == 'R')
     {
-        rpm = Serial1.parseInt();
+        rpm = Serial1.readStringUntil('@').toInt();
     }
 }
 
-int getNewDataFromWifi(void)
+void getNewDataFromWifi(void)
 {
     if (Serial3.available() > 0 && Serial3.read() == 'X')
     {
-        u8g2.setCursor(120, 64);
-        u8g2.print(Serial3.readStringUntil('@'));
+        lastWords = Serial3.readStringUntil('@');
         Serial3.print("gotyou!");
+        //delay(500);
     }
 }
 
@@ -905,209 +964,138 @@ void bmx055Setup()
 
 void getNewDataFromBMX()
 {
-  unsigned int data[6];
+    unsigned int data[6];
 
-  for (int i = 0; i < 6; i++)
-  {
-    // Start I2C Transmission
-    Wire.beginTransmission(Addr_Accl);
-    // Select data register
-    Wire.write((2 + i));
-    // Stop I2C Transmission
-    Wire.endTransmission();
-
-    // Request 1 byte of data
-    Wire.requestFrom(Addr_Accl, 1);
-
-    // Read 6 bytes of data
-    // xAccl lsb, xAccl msb, yAccl lsb, yAccl msb, zAccl lsb, zAccl msb
-    if (Wire.available() == 1)
+    for (int i = 0; i < 6; i++)
     {
-      data[i] = Wire.read();
+        // Start I2C Transmission
+        Wire.beginTransmission(Addr_Accl);
+        // Select data register
+        Wire.write((2 + i));
+        // Stop I2C Transmission
+        Wire.endTransmission();
+
+        // Request 1 byte of data
+        Wire.requestFrom(Addr_Accl, 1);
+
+        // Wire.requestFrom(Addr_Accl, 1,(2 + i), 1);
+        //Where the parameters are, in this order,
+        //the slave address,
+        //the number of consecutive registers to read,
+        //the first register to read,
+        //the length of the data (in bytes) and the stop signal at the end (if true).
+
+
+
+
+
+
+        // Read 6 bytes of data
+        // xAccl lsb, xAccl msb, yAccl lsb, yAccl msb, zAccl lsb, zAccl msb
+        if (Wire.available() == 1)
+        {
+            data[i] = Wire.read();
+        }
     }
-  }
 
-  // Convert the data to 12-bits
-  int xAccl = ((data[1] * 256) + (data[0] & 0xF0)) / 16;
-  if (xAccl > 2047)
-  {
-    xAccl -= 4096;
-  }
-  int yAccl = ((data[3] * 256) + (data[2] & 0xF0)) / 16;
-  if (yAccl > 2047)
-  {
-    yAccl -= 4096;
-  }
-  int zAccl = ((data[5] * 256) + (data[4] & 0xF0)) / 16;
-  if (zAccl > 2047)
-  {
-    zAccl -= 4096;
-  }
-
-  for (int i = 0; i < 6; i++)
-  {
-    // Start I2C Transmission
-    Wire.beginTransmission(Addr_Gyro);
-    // Select data register
-    Wire.write((2 + i));
-    // Stop I2C Transmission
-    Wire.endTransmission();
-
-    // Request 1 byte of data
-    Wire.requestFrom(Addr_Gyro, 1);
-
-    // Read 6 bytes of data
-    // xGyro lsb, xGyro msb, yGyro lsb, yGyro msb, zGyro lsb, zGyro msb
-    if (Wire.available() == 1)
+    // Convert the data to 12-bits
+    int xAccl = ((data[1] * 256) + (data[0] & 0xF0)) / 16;
+    if (xAccl > 2047)
     {
-      data[i] = Wire.read();
+        xAccl -= 4096;
     }
-  }
-
-  // Convert the data
-  int xGyro = (data[1] * 256) + data[0];
-  if (xGyro > 32767)
-  {
-    xGyro -= 65536;
-  }
-  int yGyro = (data[3] * 256) + data[2];
-  if (yGyro > 32767)
-  {
-    yGyro -= 65536;
-  }
-  int zGyro = (data[5] * 256) + data[4];
-  if (zGyro > 32767)
-  {
-    zGyro -= 65536;
-  }
-
-  for (int i = 0; i < 6; i++)
-  {
-    // Start I2C Transmission
-    Wire.beginTransmission(Addr_Mag);
-    // Select data register
-    Wire.write((66 + i));
-    // Stop I2C Transmission
-    Wire.endTransmission();
-
-    // Request 1 byte of data
-    Wire.requestFrom(Addr_Mag, 1);
-
-    // Read 6 bytes of data
-    // xMag lsb, xMag msb, yMag lsb, yMag msb, zMag lsb, zMag msb
-    if (Wire.available() == 1)
+    int yAccl = ((data[3] * 256) + (data[2] & 0xF0)) / 16;
+    if (yAccl > 2047)
     {
-      data[i] = Wire.read();
+        yAccl -= 4096;
     }
-  }
+    int zAccl = ((data[5] * 256) + (data[4] & 0xF0)) / 16;
+    if (zAccl > 2047)
+    {
+        zAccl -= 4096;
+    }
 
-  // Convert the data
-  int xMag = ((data[1] * 256) + (data[0] & 0xF8)) / 8;
-  if (xMag > 4095)
-  {
-    xMag -= 8192;
-  }
-  int yMag = ((data[3] * 256) + (data[2] & 0xF8)) / 8;
-  if (yMag > 4095)
-  {
-    yMag -= 8192;
-  }
-  int zMag = ((data[5] * 256) + (data[4] & 0xFE)) / 2;
-  if (zMag > 16383)
-  {
-    zMag -= 32768;
-  }
+    for (int i = 0; i < 6; i++)
+    {
+        // Start I2C Transmission
+        Wire.beginTransmission(Addr_Gyro);
+        // Select data register
+        Wire.write((2 + i));
+        // Stop I2C Transmission
+        Wire.endTransmission();
 
-  // Output data to serial monitor
-  //  Serial.print("Acceleration in X/Y/Z-Axis : ");
-//   Serial.print(xAccl);  Serial.print("\t");  Serial.print(yAccl);  Serial.print("\t");  Serial.println(zAccl); 
-  //  Serial.print("X-Axis of rotation : ");
-//   Serial.print(xGyro);  Serial.print("\t");  Serial.print(yGyro);  Serial.print("\t");  Serial.print(zGyro);  Serial.print("\t");
-  //  Serial.print("Magnetic field in XYZ-Axis : ");
-//   Serial.print(xMag);  Serial.print("\t");  Serial.print(yMag);  Serial.print("\t");  Serial.println(zMag);
-GForceX=xAccl;
-GForceY=yAccl;
+        // Request 1 byte of data
+        Wire.requestFrom(Addr_Gyro, 1);
+
+        // Read 6 bytes of data
+        // xGyro lsb, xGyro msb, yGyro lsb, yGyro msb, zGyro lsb, zGyro msb
+        if (Wire.available() == 1)
+        {
+            data[i] = Wire.read();
+        }
+    }
+
+    // Convert the data
+    int xGyro = (data[1] * 256) + data[0];
+    if (xGyro > 32767)
+    {
+        xGyro -= 65536;
+    }
+    int yGyro = (data[3] * 256) + data[2];
+    if (yGyro > 32767)
+    {
+        yGyro -= 65536;
+    }
+    int zGyro = (data[5] * 256) + data[4];
+    if (zGyro > 32767)
+    {
+        zGyro -= 65536;
+    }
+
+    for (int i = 0; i < 6; i++)
+    {
+        // Start I2C Transmission
+        Wire.beginTransmission(Addr_Mag);
+        // Select data register
+        Wire.write((66 + i));
+        // Stop I2C Transmission
+        Wire.endTransmission();
+
+        // Request 1 byte of data
+        Wire.requestFrom(Addr_Mag, 1);
+
+        // Read 6 bytes of data
+        // xMag lsb, xMag msb, yMag lsb, yMag msb, zMag lsb, zMag msb
+        if (Wire.available() == 1)
+        {
+            data[i] = Wire.read();
+        }
+    }
+
+    // Convert the data
+    int xMag = ((data[1] * 256) + (data[0] & 0xF8)) / 8;
+    if (xMag > 4095)
+    {
+        xMag -= 8192;
+    }
+    int yMag = ((data[3] * 256) + (data[2] & 0xF8)) / 8;
+    if (yMag > 4095)
+    {
+        yMag -= 8192;
+    }
+    int zMag = ((data[5] * 256) + (data[4] & 0xFE)) / 2;
+    if (zMag > 16383)
+    {
+        zMag -= 32768;
+    }
+
+    // Output data to Serial monitor
+    //  Serial.print("Acceleration in X/Y/Z-Axis : ");
+    //   Serial.print(xAccl);  Serial.print("\t");  Serial.print(yAccl);  Serial.print("\t");  Serial.println(zAccl);
+    //  Serial.print("X-Axis of rotation : ");
+    //   Serial.print(xGyro);  Serial.print("\t");  Serial.print(yGyro);  Serial.print("\t");  Serial.print(zGyro);  Serial.print("\t");
+    //  Serial.print("Magnetic field in XYZ-Axis : ");
+    //   Serial.print(xMag);  Serial.print("\t");  Serial.print(yMag);  Serial.print("\t");  Serial.println(zMag);
+    GForceX = xAccl;
+    GForceY = yAccl;
 }
-
-
-float getNewDataFromTemp()
-{
-  uint16_t tempUK;
-  float tempK;
-  uint8_t hB, lB, pec;
-
-  digitalWrite(SYNC_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(SYNC_PIN, LOW);
-
-  TWI_StartRead(pTwi, ADDR, TOBJ_1, 1);
-
-  lB = readByte();
-  hB = readByte();
-
-  //last read
-  TWI_SendSTOPCondition(pTwi);
-  pec = readByte();
-
-  while (!TWI_TransferComplete(pTwi))
-    ;
-  //TWI_WaitTransferComplete(pTwi, RECV_TIMEOUT);
-
-  tempUK = (hB << 8) | lB;
-  if (tempUK & (1 << 16))
-  {
-    Serial.print("Error !");
-    Serial.println(tempK);
-  }
-  else
-  {
-    tempK = ((float)tempUK * 2) / 100;
-    Serial.print("gettempinC: ");
-    Serial.println(tempK - 273.15);
-    return(tempK - 273.15);
-  }
-}
-
-
-//👇temp function starts here
-uint8_t readByte() {
-  //TWI_WaitByteReceived(pTwi, RECV_TIMEOUT);
-  while (!TWI_ByteReceived(pTwi))
-    ;
-  return TWI_ReadByte(pTwi);
-}
-
-static inline bool TWI_WaitTransferComplete(Twi *_twi, uint32_t _timeout) {
-  while (!TWI_TransferComplete(_twi)) {
-    if (TWI_FailedAcknowledge(_twi))
-      return false;
-    if (--_timeout == 0)
-      return false;
-  }
-  return true;
-}
-
-static inline bool TWI_WaitByteReceived(Twi *_twi, uint32_t _timeout) {
-  while (!TWI_ByteReceived(_twi)) {
-    if (TWI_FailedAcknowledge(_twi))
-      return false;
-    if (--_timeout == 0)
-      return false;
-  }
-  return true;
-}
-
-static inline bool TWI_FailedAcknowledge(Twi *pTwi) {
-  return pTwi->TWI_SR & TWI_SR_NACK;
-}
-//👆temp function ends here
-
-/*
-char rotary_process()
-{
-  char pinstate = (digitalRead(ROTARY_PIN2) << 1) | digitalRead(ROTARY_PIN1);
-  state = ttable[state & 0xf][pinstate];
-  return (state & 0xc0);
-}
-
-*/
