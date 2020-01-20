@@ -1,0 +1,4 @@
+(sym_lib_table
+  (lib (name teensy4_header_breakout-rescue)(type Legacy)(uri ${KIPRJMOD}/teensy4_header_breakout-rescue.lib)(options "")(descr ""))
+  (lib (name BoardDev2020-rescue)(type Legacy)(uri ${KIPRJMOD}/BoardDev2020-rescue.lib)(options "")(descr ""))
+)
