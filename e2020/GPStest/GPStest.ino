@@ -10,8 +10,8 @@ TinyGPS gps;
 
 // Use one of these to connect your GPS
 // ------------------------------------
-//#define gpsPort Serial2
-SoftwareSerial gpsPort(7, 8);
+#define gpsPort Serial2
+//SoftwareSerial gpsPort(7, 8);
 
 char buf[32];
 
